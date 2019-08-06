@@ -1,4 +1,4 @@
-package com.bc.zarr;
+package org.esa.snap.dataio.znap.snap;
 
 import static org.junit.Assert.*;
 

@@ -1,39 +1,32 @@
 package org.esa.snap.dataio.znap.snap;
 
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
-import static com.bc.zarr.CFConstantsAndUtils.*;
-import static com.bc.zarr.ZarrUtils.*;
-import static com.bc.zarr.ZarrConstants.*;
-
 import com.bc.ceres.core.ProgressMonitor;
-import com.bc.zarr.*;
+import com.bc.zarr.ZarrArray;
+import com.bc.zarr.ZarrDataType;
+import com.bc.zarr.ZarrGroup;
+import com.bc.zarr.ZarrUtils;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.esa.snap.core.dataio.AbstractProductReader;
 import org.esa.snap.core.dataio.ProductReaderPlugIn;
-import org.esa.snap.core.datamodel.Band;
-import org.esa.snap.core.datamodel.FlagCoding;
-import org.esa.snap.core.datamodel.IndexCoding;
-import org.esa.snap.core.datamodel.MetadataAttribute;
-import org.esa.snap.core.datamodel.MetadataElement;
-import org.esa.snap.core.datamodel.Product;
-import org.esa.snap.core.datamodel.ProductData;
-import org.esa.snap.core.datamodel.TiePointGrid;
+import org.esa.snap.core.datamodel.*;
 import org.esa.snap.core.image.ResolutionLevel;
 import ucar.ma2.InvalidRangeException;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
+
+import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
+import static ucar.nc2.constants.ACDD.TIME_END;
+import static ucar.nc2.constants.ACDD.TIME_START;
 
 public class ZarrProductReader extends AbstractProductReader {
 
@@ -51,40 +44,14 @@ public class ZarrProductReader extends AbstractProductReader {
         // TODO: 23.07.2019 SE -- Frage 1 siehe Trello https://trello.com/c/HMw8CxqL/4-fragen-an-norman
         final Path rootPath = convertToPath(getInput());
         final ZarrGroup rootGroup = ZarrGroup.open(rootPath);
+        final Map<String, Object> productAttributes = rootGroup.getAttributes();
 
-
-
-
-
-        final List<Path> headerPaths = Files.find(rootPath, 10, (path, basicFileAttributes) ->
-                path.getFileName().toString().equals(FILENAME_DOT_ZARRAY)
-        ).collect(Collectors.toList());
-
-        final List<String> rasterNames = new ArrayList<>();
-        final Map<String, Map<String, Object>> attributesMap = new TreeMap<>();
-        for (Path zarrHeaderPath : headerPaths) {
-            final Path rasterDir = zarrHeaderPath.getParent();
-            final String rasterName = rasterDir.getFileName().toString();
-            rasterNames.add(rasterName);
-            final Path zarrAttribsPath = rasterDir.resolve(FILENAME_DOT_ZATTRS);
-            if (Files.isReadable(zarrAttribsPath)) {
-                try (BufferedReader reader = Files.newBufferedReader(zarrAttribsPath)) {
-                    final Map<String, Object> attributes = fromJson(reader, Map.class);
-                    attributesMap.put(rasterName, attributes);
-                }
-            }
-        }
-
-        final Map<String, Object> productAttributes;
-        try (BufferedReader reader = Files.newBufferedReader(rootPath.resolve(FILENAME_DOT_ZATTRS))) {
-            productAttributes = fromJson(reader, Map.class);
-        }
         final String productName = (String) productAttributes.get(PRODUCT_NAME);
         final String productType = (String) productAttributes.get(PRODUCT_TYPE);
         final String productDesc = (String) productAttributes.get(PRODUCT_DESC);
         final ProductData.UTC sensingStart = getTime(productAttributes, TIME_START, rootPath); // "time_coverage_start"
         final ProductData.UTC sensingStop = getTime(productAttributes, TIME_END, rootPath); // "time_coverage_end"
-        final List<Map<String, Object>> product_metadata = (List) productAttributes.get(PRODUCT_METADATA);
+        final String product_metadata = (String) productAttributes.get(PRODUCT_METADATA);
         final ArrayList<MetadataElement> metadataElements = toMetadataElements(product_metadata);
         final Product product = new Product(productName, productType, this);
         product.setDescription(productDesc);
@@ -100,8 +67,11 @@ public class ZarrProductReader extends AbstractProductReader {
             product.getMetadataRoot().addElement(metadataElement);
         }
 
-        for (String rasterName : rasterNames) {
-            final ZarrArray zarrArray = rootGroup.openArray(rasterName);
+
+        final TreeSet<String> arrayKeys = rootGroup.getArrayKeys();
+        for (String arrayKey : arrayKeys) {
+            final ZarrArray zarrArray = rootGroup.openArray(arrayKey);
+            final String rasterName = getRasterName(arrayKey);
 
             final int[] shape = zarrArray.getShape();
             final int[] chunks = zarrArray.getChunks();
@@ -111,7 +81,7 @@ public class ZarrProductReader extends AbstractProductReader {
             final int width = shape[1];
             final int height = shape[0];
 
-            final Map<String, Object> attributes = attributesMap.get(rasterName);
+            final Map<String, Object> attributes = zarrArray.getAttributes();
 
             if (attributes != null && attributes.containsKey(OFFSET_X)) {
                 final double offsetX = (double) attributes.get(OFFSET_X);
@@ -142,6 +112,10 @@ public class ZarrProductReader extends AbstractProductReader {
         product.getSceneRasterSize();
         product.setModified(false);
         return product;
+    }
+
+    private String getRasterName(String arrayKey) {
+        return arrayKey.contains("/")? arrayKey.substring(arrayKey.lastIndexOf("/")+1):arrayKey;
     }
 
     @Override
@@ -252,7 +226,8 @@ public class ZarrProductReader extends AbstractProductReader {
         return sampleCodingName;
     }
 
-    private static ArrayList<MetadataElement> toMetadataElements(List<Map<String, Object>> product_metadata) {
+    private static ArrayList<MetadataElement> toMetadataElements(String product_metadata_str) {
+        List<Map<String, Object>> product_metadata= ZarrUtils.fromJson(new StringReader(product_metadata_str),  List.class);
         final ArrayList<MetadataElement> snapElements = new ArrayList<>();
         for (Map<String, Object> jsonElement : product_metadata) {
             final MetadataElementGson element = toGsonMetadataElement(jsonElement);
@@ -374,6 +349,9 @@ public class ZarrProductReader extends AbstractProductReader {
         Object attribute = attributes.get(FILL_VALUE);
         if (attribute == null) {
             attribute = attributes.get(MISSING_VALUE);
+        }
+        if (attribute instanceof String) {
+            return Double.valueOf((String)attribute);
         }
         if (attribute != null) {
             return (Number) attribute;

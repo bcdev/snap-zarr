@@ -14,7 +14,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package com.bc.zarr;
+package org.esa.snap.dataio.znap.snap;
 
 import ucar.nc2.constants.CDM;
 import ucar.nc2.constants.CF;

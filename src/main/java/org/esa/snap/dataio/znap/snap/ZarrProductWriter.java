@@ -3,7 +3,6 @@ package org.esa.snap.dataio.znap.snap;
 import com.bc.ceres.core.ProgressMonitor;
 import com.bc.ceres.glevel.MultiLevelImage;
 import com.bc.zarr.*;
-import com.bc.zarr.storage.FileSystemStore;
 import org.esa.snap.core.dataio.AbstractProductWriter;
 import org.esa.snap.core.datamodel.*;
 import org.esa.snap.core.image.ImageManager;
@@ -20,9 +19,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
-import static com.bc.zarr.CFConstantsAndUtils.*;
 import static org.esa.snap.core.util.StringUtils.isNotNullAndNotEmpty;
+import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
+import static ucar.nc2.constants.ACDD.TIME_END;
+import static ucar.nc2.constants.ACDD.TIME_START;
 
 public class ZarrProductWriter extends AbstractProductWriter {
 
@@ -87,7 +88,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
         // common data model manner { y, x }
         preferredChunks = new int[]{preferredTileSize.height, preferredTileSize.width};
 
-        zarrGroup = ZarrGroup.create(new FileSystemStore(output), getProductAttributes(product));
+        zarrGroup = ZarrGroup.create(output, getProductAttributes(product));
         for (TiePointGrid tiePointGrid : product.getTiePointGrids()) {
             writeTiePointGrid(tiePointGrid);
         }
@@ -104,7 +105,9 @@ public class ZarrProductWriter extends AbstractProductWriter {
         productAttributes.put(TIME_START, ISO8601ConverterWithMlliseconds.format(product.getStartTime())); // "time_coverage_start"
         productAttributes.put(TIME_END, ISO8601ConverterWithMlliseconds.format(product.getEndTime())); // "time_coverage_end"
 
-        productAttributes.put(PRODUCT_METADATA, product.getMetadataRoot().getElements());
+        final boolean prettyPrinting = false;
+        final String metadataNotPrettyPrint = ZarrUtils.toJson(product.getMetadataRoot().getElements(), prettyPrinting);
+        productAttributes.put(PRODUCT_METADATA, metadataNotPrettyPrint);
 
         if (product.getAutoGrouping() != null) {
             productAttributes.put(DATASET_AUTO_GROUPING, product.getAutoGrouping().toString());
@@ -282,7 +285,13 @@ public class ZarrProductWriter extends AbstractProductWriter {
             attributes.put(DISCONTINUITY, discontinuity);
         }
         trimChunks(chunks, shape);
-        final ZarrArray zarrArray = zarrGroup.createArray(name, getZarrDataType(tiePointGrid), shape, chunks, getZarrFillValue(tiePointGrid), _compressor, attributes);
+        final ArrayParameters arrayParameters = ArrayParameters.builder()
+                .withDataType(getZarrDataType(tiePointGrid))
+                .withShape(shape)
+                .withChunks(chunks)
+                .withFillValue(getZarrFillValue(tiePointGrid))
+                .withCompressor(_compressor).build();
+        final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParameters, attributes);
         try {
             zarrArray.write(gridData.getElems(), shape, new int[]{0, 0});
         } catch (InvalidRangeException e) {
@@ -309,7 +318,12 @@ public class ZarrProductWriter extends AbstractProductWriter {
             chunks = Arrays.copyOf(preferredChunks, preferredChunks.length);
         }
         trimChunks(chunks, shape);
-        final ZarrArray zarrArray = zarrGroup.createArray(name, getZarrDataType(band), shape, chunks, getZarrFillValue(band), _compressor, getBandAttributes(band));
+        final ArrayParameters arrayParameters = ArrayParameters.builder()
+                .withDataType(getZarrDataType(band))
+                .withShape(shape).withChunks(chunks)
+                .withFillValue(getZarrFillValue(band))
+                .withCompressor(_compressor).build();
+        final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParameters, getBandAttributes(band));
         zarrWriters.put(name, zarrArray);
     }
 
