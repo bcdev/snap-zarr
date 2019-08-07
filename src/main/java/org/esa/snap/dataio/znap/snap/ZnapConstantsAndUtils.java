@@ -16,7 +16,7 @@
  */
 package org.esa.snap.dataio.znap.snap;
 
-import com.bc.zarr.ZarrDataType;
+import com.bc.zarr.DataType;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -90,22 +90,22 @@ final class ZnapConstantsAndUtils {
         Path convertOutput(Object output);
     }
 
-    static SnapDataType getSnapDataType(ZarrDataType zarrDataType) {
-        if (zarrDataType == ZarrDataType.f8) {
+    static SnapDataType getSnapDataType(DataType zarrDataType) {
+        if (zarrDataType == DataType.f8) {
             return SnapDataType.TYPE_FLOAT64;
-        } else if (zarrDataType == ZarrDataType.f4) {
+        } else if (zarrDataType == DataType.f4) {
             return SnapDataType.TYPE_FLOAT32;
-        } else if (zarrDataType == ZarrDataType.i1) {
+        } else if (zarrDataType == DataType.i1) {
             return SnapDataType.TYPE_INT8;
-        } else if (zarrDataType == ZarrDataType.u1) {
+        } else if (zarrDataType == DataType.u1) {
             return SnapDataType.TYPE_UINT8;
-        } else if (zarrDataType == ZarrDataType.i2) {
+        } else if (zarrDataType == DataType.i2) {
             return SnapDataType.TYPE_INT16;
-        } else if (zarrDataType == ZarrDataType.u2) {
+        } else if (zarrDataType == DataType.u2) {
             return SnapDataType.TYPE_UINT16;
-        } else if (zarrDataType == ZarrDataType.i4) {
+        } else if (zarrDataType == DataType.i4) {
             return SnapDataType.TYPE_INT32;
-        } else if (zarrDataType == ZarrDataType.u4) {
+        } else if (zarrDataType == DataType.u4) {
             return SnapDataType.TYPE_UINT32;
         } else {
             throw new IllegalStateException();

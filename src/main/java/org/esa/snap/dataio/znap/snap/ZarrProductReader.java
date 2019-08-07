@@ -1,8 +1,8 @@
 package org.esa.snap.dataio.znap.snap;
 
 import com.bc.ceres.core.ProgressMonitor;
+import com.bc.zarr.DataType;
 import com.bc.zarr.ZarrArray;
-import com.bc.zarr.ZarrDataType;
 import com.bc.zarr.ZarrGroup;
 import com.bc.zarr.ZarrUtils;
 import com.google.gson.Gson;
@@ -75,7 +75,7 @@ public class ZarrProductReader extends AbstractProductReader {
 
             final int[] shape = zarrArray.getShape();
             final int[] chunks = zarrArray.getChunks();
-            final ZarrDataType zarrDataType = zarrArray.getDataType();
+            final DataType zarrDataType = zarrArray.getDataType();
 
             final SnapDataType snapDataType = getSnapDataType(zarrDataType);
             final int width = shape[1];

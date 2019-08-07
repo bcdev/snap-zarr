@@ -19,6 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
+import static com.bc.zarr.DataType.u4;
 import static org.esa.snap.core.util.StringUtils.isNotNullAndNotEmpty;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
@@ -216,8 +217,8 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
     private static Number getZarrFillValue(RasterDataNode node) {
         final Double geophysicalNoDataValue = node.getGeophysicalNoDataValue();
-        final ZarrDataType zarrDataType = getZarrDataType(node);
-        if (zarrDataType == ZarrDataType.f8) {
+        final DataType zarrDataType = getZarrDataType(node);
+        if (zarrDataType == DataType.f8) {
             return geophysicalNoDataValue;
         }
         switch (zarrDataType) {
@@ -235,29 +236,29 @@ public class ZarrProductWriter extends AbstractProductWriter {
         }
     }
 
-    private static ZarrDataType getZarrDataType(RasterDataNode node) {
+    private static DataType getZarrDataType(RasterDataNode node) {
         if (node.isLog10Scaled()) {
-            return ZarrDataType.f4;
+            return com.bc.zarr.DataType.f4;
         }
         final int dataType = node.getDataType();
 //        final int dataType = node.getGeophysicalDataType();
         switch (dataType) {
             case ProductData.TYPE_FLOAT64:
-                return ZarrDataType.f8;
+                return DataType.f8;
             case ProductData.TYPE_FLOAT32:
-                return ZarrDataType.f4;
+                return DataType.f4;
             case ProductData.TYPE_INT8:
-                return ZarrDataType.i1;
+                return DataType.i1;
             case ProductData.TYPE_INT16:
-                return ZarrDataType.i2;
+                return DataType.i2;
             case ProductData.TYPE_INT32:
-                return ZarrDataType.i4;
+                return DataType.i4;
             case ProductData.TYPE_UINT8:
-                return ZarrDataType.u1;
+                return DataType.u1;
             case ProductData.TYPE_UINT16:
-                return ZarrDataType.u2;
+                return DataType.u2;
             case ProductData.TYPE_UINT32:
-                return ZarrDataType.u4;
+                return DataType.u4;
             default:
                 throw new IllegalStateException();
         }
@@ -285,13 +286,13 @@ public class ZarrProductWriter extends AbstractProductWriter {
             attributes.put(DISCONTINUITY, discontinuity);
         }
         trimChunks(chunks, shape);
-        final ArrayParameters arrayParameters = ArrayParameters.builder()
+        final ArrayParams arrayParams = new ArrayParams()
                 .withDataType(getZarrDataType(tiePointGrid))
                 .withShape(shape)
                 .withChunks(chunks)
                 .withFillValue(getZarrFillValue(tiePointGrid))
-                .withCompressor(_compressor).build();
-        final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParameters, attributes);
+                .withCompressor(_compressor);
+        final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParams, attributes);
         try {
             zarrArray.write(gridData.getElems(), shape, new int[]{0, 0});
         } catch (InvalidRangeException e) {
@@ -318,12 +319,12 @@ public class ZarrProductWriter extends AbstractProductWriter {
             chunks = Arrays.copyOf(preferredChunks, preferredChunks.length);
         }
         trimChunks(chunks, shape);
-        final ArrayParameters arrayParameters = ArrayParameters.builder()
+        final ArrayParams arrayParams = new ArrayParams()
                 .withDataType(getZarrDataType(band))
                 .withShape(shape).withChunks(chunks)
                 .withFillValue(getZarrFillValue(band))
-                .withCompressor(_compressor).build();
-        final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParameters, getBandAttributes(band));
+                .withCompressor(_compressor);
+        final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParams, getBandAttributes(band));
         zarrWriters.put(name, zarrArray);
     }
 
