@@ -20,7 +20,7 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeSet;
+import java.util.Set;
 import java.util.logging.Logger;
 
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
@@ -68,7 +68,7 @@ public class ZarrProductReader extends AbstractProductReader {
         }
 
 
-        final TreeSet<String> arrayKeys = rootGroup.getArrayKeys();
+        final Set<String> arrayKeys = rootGroup.getArrayKeys();
         for (String arrayKey : arrayKeys) {
             final ZarrArray zarrArray = rootGroup.openArray(arrayKey);
             final String rasterName = getRasterName(arrayKey);
@@ -115,7 +115,7 @@ public class ZarrProductReader extends AbstractProductReader {
     }
 
     private String getRasterName(String arrayKey) {
-        return arrayKey.contains("/")? arrayKey.substring(arrayKey.lastIndexOf("/")+1):arrayKey;
+        return arrayKey.contains("/") ? arrayKey.substring(arrayKey.lastIndexOf("/") + 1) : arrayKey;
     }
 
     @Override
@@ -151,10 +151,10 @@ public class ZarrProductReader extends AbstractProductReader {
         }
         // TODO: 21.07.2019 SE -- units for bandwidth, wavelength, solarFlux
         if (attributes.get(BANDWIDTH) != null) {
-            band.setSpectralBandwidth(((Number)attributes.get(BANDWIDTH)).floatValue());
+            band.setSpectralBandwidth(((Number) attributes.get(BANDWIDTH)).floatValue());
         }
-        if (attributes.get(WAVELENGTH)!= null) {
-             band.setSpectralWavelength(((Number) attributes.get(WAVELENGTH)).floatValue());
+        if (attributes.get(WAVELENGTH) != null) {
+            band.setSpectralWavelength(((Number) attributes.get(WAVELENGTH)).floatValue());
         }
         if (attributes.get(SOLAR_FLUX) != null) {
             band.setSolarFlux(((Number) attributes.get(SOLAR_FLUX)).floatValue());
@@ -227,7 +227,7 @@ public class ZarrProductReader extends AbstractProductReader {
     }
 
     private static ArrayList<MetadataElement> toMetadataElements(String product_metadata_str) {
-        List<Map<String, Object>> product_metadata= ZarrUtils.fromJson(new StringReader(product_metadata_str),  List.class);
+        List<Map<String, Object>> product_metadata = ZarrUtils.fromJson(new StringReader(product_metadata_str), List.class);
         final ArrayList<MetadataElement> snapElements = new ArrayList<>();
         for (Map<String, Object> jsonElement : product_metadata) {
             final MetadataElementGson element = toGsonMetadataElement(jsonElement);
@@ -351,7 +351,7 @@ public class ZarrProductReader extends AbstractProductReader {
             attribute = attributes.get(MISSING_VALUE);
         }
         if (attribute instanceof String) {
-            return Double.valueOf((String)attribute);
+            return Double.valueOf((String) attribute);
         }
         if (attribute != null) {
             return (Number) attribute;
