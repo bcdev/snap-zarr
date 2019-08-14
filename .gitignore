@@ -1,5 +1,7 @@
 .idea/
 *.iml
+*.ipr
+*.iws
 
 # Created by .ignore support plugin (hsz.mobi)
 ### Java template
@@ -8,7 +10,6 @@
 
 # Log file
 *.log
-
 
 # Package Files #
 *.jar
