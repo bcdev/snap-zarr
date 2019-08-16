@@ -69,7 +69,7 @@
     <repositories>
         <repository>
             <id>bc-nexus-repo</id>
-            <name>Public Maven Repo Brockmann-Consult</name>
+            <name>Brockmann-Consult Public Maven Repository</name>
             <url>http://nexus.senbox.net/nexus/content/groups/public/</url>
         </repository>
     </repositories>

@@ -287,11 +287,11 @@ public class ZarrProductWriter extends AbstractProductWriter {
         }
         trimChunks(chunks, shape);
         final ArrayParams arrayParams = new ArrayParams()
-                .withDataType(getZarrDataType(tiePointGrid))
-                .withShape(shape)
-                .withChunks(chunks)
-                .withFillValue(getZarrFillValue(tiePointGrid))
-                .withCompressor(_compressor);
+                .dataType(getZarrDataType(tiePointGrid))
+                .shape(shape)
+                .chunks(chunks)
+                .fillValue(getZarrFillValue(tiePointGrid))
+                .compressor(_compressor);
         final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParams, attributes);
         try {
             zarrArray.write(gridData.getElems(), shape, new int[]{0, 0});
@@ -320,10 +320,10 @@ public class ZarrProductWriter extends AbstractProductWriter {
         }
         trimChunks(chunks, shape);
         final ArrayParams arrayParams = new ArrayParams()
-                .withDataType(getZarrDataType(band))
-                .withShape(shape).withChunks(chunks)
-                .withFillValue(getZarrFillValue(band))
-                .withCompressor(_compressor);
+                .dataType(getZarrDataType(band))
+                .shape(shape).chunks(chunks)
+                .fillValue(getZarrFillValue(band))
+                .compressor(_compressor);
         final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParams, getBandAttributes(band));
         zarrWriters.put(name, zarrArray);
     }
