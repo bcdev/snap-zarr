@@ -9,7 +9,7 @@
     <version>0.2-SNAPSHOT</version>
 
     <properties>
-        <snap.version>8.0.0-SNAPSHOT</snap.version>
+        <snap.version>7.0.0</snap.version>
     </properties>
 
     <packaging>nbm</packaging>
