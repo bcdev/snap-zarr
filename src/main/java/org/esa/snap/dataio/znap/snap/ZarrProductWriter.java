@@ -17,9 +17,9 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
-import static com.bc.zarr.DataType.u4;
 import static org.esa.snap.core.util.StringUtils.isNotNullAndNotEmpty;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
@@ -69,6 +69,11 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
     @Override
     public void close() throws IOException {
+        try {
+            executorService.shutdown();
+            executorService.awaitTermination(Integer.MAX_VALUE, TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {
+        }
     }
 
     @Override
