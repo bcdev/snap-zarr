@@ -6,7 +6,7 @@
 
     <groupId>org.esa.snap</groupId>
     <artifactId>snap-zarr</artifactId>
-    <version>0.2</version>
+    <version>0.3-SNAPSHOT</version>
 
     <properties>
         <snap.version>7.0.0</snap.version>
@@ -38,7 +38,7 @@
         <dependency>
             <groupId>com.bc.zarr</groupId>
             <artifactId>jzarr</artifactId>
-            <version>0.2</version>
+            <version>0.3-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.hamcrest</groupId>
