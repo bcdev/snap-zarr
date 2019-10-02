@@ -5,39 +5,34 @@ import com.bc.ceres.glevel.MultiLevelImage;
 import com.bc.zarr.*;
 import org.esa.snap.core.dataio.AbstractProductWriter;
 import org.esa.snap.core.datamodel.*;
-import org.esa.snap.core.image.ImageManager;
 import ucar.ma2.InvalidRangeException;
 
-import java.awt.*;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.logging.Logger;
 
 import static org.esa.snap.core.util.StringUtils.isNotNullAndNotEmpty;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
-import static ucar.nc2.constants.ACDD.TIME_END;
-import static ucar.nc2.constants.ACDD.TIME_START;
+import static ucar.nc2.constants.CDM.TIME_END;
+import static ucar.nc2.constants.CDM.TIME_START;
 
 public class ZarrProductWriter extends AbstractProductWriter {
 
     private final HashMap<String, ZarrArray> zarrWriters = new HashMap<>();
-    private final ExecutorService executorService;
+    private ThreadPoolExecutor _executorService;
     private Compressor _compressor;
     private ZarrGroup zarrGroup;
-    private int[] preferredChunks;
+//    private int[] preferredChunks;
+//    private int submitThreshold;
 
     public ZarrProductWriter(final ZarrProductWriterPlugIn productWriterPlugIn) {
         super(productWriterPlugIn);
         _compressor = CompressorFactory.create("zlib", 3);
-        executorService = Executors.newFixedThreadPool(4);
+        setNumTreads(8);
     }
 
     @Override
@@ -60,7 +55,15 @@ public class ZarrProductWriter extends AbstractProductWriter {
                 throw new IOException("Invalid range while writing raster '" + name + "'", e);
             }
         };
-        executorService.submit(callable);
+//        int activeCount = _executorService.getActiveCount();
+//        while (activeCount >= submitThreshold) {
+//            try {
+//                Thread.sleep(200);
+//                activeCount = _executorService.getActiveCount();
+//            } catch (InterruptedException ignored) {
+//            }
+//        }
+        _executorService.submit(callable);
     }
 
     @Override
@@ -70,8 +73,8 @@ public class ZarrProductWriter extends AbstractProductWriter {
     @Override
     public void close() throws IOException {
         try {
-            executorService.shutdown();
-            executorService.awaitTermination(Integer.MAX_VALUE, TimeUnit.SECONDS);
+            _executorService.shutdown();
+            _executorService.awaitTermination(Integer.MAX_VALUE, TimeUnit.SECONDS);
         } catch (InterruptedException ignored) {
         }
     }
@@ -85,14 +88,19 @@ public class ZarrProductWriter extends AbstractProductWriter {
         _compressor = compressor;
     }
 
+    public void setNumTreads(int numTreads) {
+        _executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(numTreads > 0 ? numTreads : 1);
+//        submitThreshold = numTreads;
+    }
+
     @Override
     protected void writeProductNodesImpl() throws IOException {
         final Path output = convertToPath(getOutput());
         final Product product = getSourceProduct();
-        final Dimension preferredTileSize = ImageManager.getPreferredTileSize(product);
+//        final Dimension preferredTileSize = ImageManager.getPreferredTileSize(product);
 
         // common data model manner { y, x }
-        preferredChunks = new int[]{preferredTileSize.height, preferredTileSize.width};
+//        preferredChunks = new int[]{preferredTileSize.height, preferredTileSize.width};
 
         zarrGroup = ZarrGroup.create(output, getProductAttributes(product));
         for (TiePointGrid tiePointGrid : product.getTiePointGrids()) {
@@ -279,7 +287,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
         } else {
             gridData = readTiePointGridData(tiePointGrid);
         }
-        int[] chunks = Arrays.copyOf(preferredChunks, preferredChunks.length);
+//        int[] chunks = Arrays.copyOf(preferredChunks, preferredChunks.length);
         final Map<String, Object> attributes = new HashMap<>();
         collectRasterAttributes(tiePointGrid, attributes);
         attributes.put(OFFSET_X, tiePointGrid.getOffsetX());
@@ -290,11 +298,11 @@ public class ZarrProductWriter extends AbstractProductWriter {
         if (discontinuity != TiePointGrid.DISCONT_NONE) {
             attributes.put(DISCONTINUITY, discontinuity);
         }
-        trimChunks(chunks, shape);
+//        trimChunks(chunks, shape);
         final ArrayParams arrayParams = new ArrayParams()
                 .dataType(getZarrDataType(tiePointGrid))
                 .shape(shape)
-                .chunks(chunks)
+//                .chunks(chunks)
                 .fillValue(getZarrFillValue(tiePointGrid))
                 .compressor(_compressor);
         final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParams, attributes);
@@ -317,16 +325,20 @@ public class ZarrProductWriter extends AbstractProductWriter {
         final int[] shape = {band.getRasterHeight(), band.getRasterWidth()}; // common data model manner { y, x }
         final String name = band.getName();
         int[] chunks;
-        if (band.isSourceImageSet()) {
-            final MultiLevelImage sourceImage = band.getSourceImage();
-            chunks = new int[]{sourceImage.getTileHeight(), sourceImage.getTileWidth()}; // common data model manner { y, x }
-        } else {
-            chunks = Arrays.copyOf(preferredChunks, preferredChunks.length);
-        }
+        MultiLevelImage sourceImage = band.getSourceImage();
+        chunks = new int[]{sourceImage.getTileHeight(), sourceImage.getTileWidth()}; // common data model manner { y, x }
+//        if (band.isSourceImageSet()) {
+//            final MultiLevelImage sourceImage = band.getSourceImage();
+//            chunks = new int[]{sourceImage.getTileHeight(), sourceImage.getTileWidth()}; // common data model manner { y, x }
+//        } else {
+//            System.out.println("Use preferred chunks for band '" + name + "'");
+//            chunks = Arrays.copyOf(preferredChunks, preferredChunks.length);
+//        }
         trimChunks(chunks, shape);
         final ArrayParams arrayParams = new ArrayParams()
                 .dataType(getZarrDataType(band))
-                .shape(shape).chunks(chunks)
+                .shape(shape)
+                .chunks(chunks)
                 .fillValue(getZarrFillValue(band))
                 .compressor(_compressor);
         final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParams, getBandAttributes(band));

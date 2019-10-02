@@ -25,8 +25,8 @@ import java.util.logging.Logger;
 
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
-import static ucar.nc2.constants.ACDD.TIME_END;
-import static ucar.nc2.constants.ACDD.TIME_START;
+import static ucar.nc2.constants.CDM.TIME_END;
+import static ucar.nc2.constants.CDM.TIME_START;
 
 public class ZarrProductReader extends AbstractProductReader {
 
