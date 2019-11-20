@@ -30,9 +30,11 @@ public class ZarrProductWriterTest_collectSpectralAttributes {
         band.setSpectralBandwidth(234.5f);
         ZarrProductWriter.collectBandAttributes(band, attributes);
 
-        assertThat(attributes.size(), is(1));
+        assertThat(attributes.size(), is(2));
         assertThat(attributes.containsKey(BANDWIDTH), is(true));
+        assertThat(attributes.containsKey(BANDWIDTH+UNIT_EXTENSION), is(true));
         assertThat(attributes.get(BANDWIDTH), is(234.5f));
+        assertThat(attributes.get(BANDWIDTH+UNIT_EXTENSION), is("nm"));
     }
 
     @Test
@@ -42,9 +44,11 @@ public class ZarrProductWriterTest_collectSpectralAttributes {
         band.setSpectralWavelength(123.4f);
         ZarrProductWriter.collectBandAttributes(band, attributes);
 
-        assertThat(attributes.size(), is(1));
+        assertThat(attributes.size(), is(2));
         assertThat(attributes.containsKey(WAVELENGTH), is(true));
+        assertThat(attributes.containsKey(WAVELENGTH + UNIT_EXTENSION), is(true));
         assertThat(attributes.get(WAVELENGTH), is(123.4f));
+        assertThat(attributes.get(WAVELENGTH+UNIT_EXTENSION), is("nm"));
     }
 
     @Test

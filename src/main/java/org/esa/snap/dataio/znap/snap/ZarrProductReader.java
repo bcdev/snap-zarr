@@ -8,6 +8,8 @@ import com.bc.zarr.ZarrUtils;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.esa.snap.core.dataio.AbstractProductReader;
+import org.esa.snap.core.dataio.ProductIO;
+import org.esa.snap.core.dataio.ProductReader;
 import org.esa.snap.core.dataio.ProductReaderPlugIn;
 import org.esa.snap.core.datamodel.*;
 import org.esa.snap.core.image.ResolutionLevel;
@@ -17,18 +19,19 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Path;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.logging.Logger;
+import java.util.*;
 
+import static org.esa.snap.core.util.SystemUtils.LOG;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
 import static ucar.nc2.constants.CDM.TIME_END;
 import static ucar.nc2.constants.CDM.TIME_START;
 
 public class ZarrProductReader extends AbstractProductReader {
+
+    private ProductReaderPlugIn binaryReaderPlugIn;
+    private String binaryFileExtension;
+    private HashMap<DataNode, Product> binaryProducts;
 
     protected ZarrProductReader(ProductReaderPlugIn readerPlugIn) {
         super(readerPlugIn);
@@ -37,6 +40,18 @@ public class ZarrProductReader extends AbstractProductReader {
     @Override
     public void readBandRasterData(Band destBand, int destOffsetX, int destOffsetY, int destWidth, int destHeight, ProductData destBuffer, ProgressMonitor pm) throws IOException {
         throw new IllegalStateException("Data is provided by images");
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (binaryProducts != null) {
+            for (Product product : binaryProducts.values()) {
+                product.dispose();
+            }
+            binaryProducts.clear();
+            binaryProducts = null;
+        }
+        super.close();
     }
 
     @Override
@@ -89,10 +104,21 @@ public class ZarrProductReader extends AbstractProductReader {
                 final double subSamplingX = (double) attributes.get(SUBSAMPLING_X);
                 final double subSamplingY = (double) attributes.get(SUBSAMPLING_Y);
                 final float[] dataBuffer = new float[width * height];
-                try {
-                    zarrArray.read(dataBuffer, shape, new int[]{0, 0});
-                } catch (InvalidRangeException e) {
-                    throw new IOException("InvalidRangeException while reading tie point raster '" + rasterName + "'", e);
+                if (attributes != null && attributes.containsKey(ATTRIBUTE_NAME_BINARY_FORMAT)) {
+                    initBinaryReaderPlugin(attributes);
+                    final Path srcPath = rootPath.resolve(rasterName).resolve(rasterName + binaryFileExtension);
+                    final ProductReader reader = binaryReaderPlugIn.createReaderInstance();
+                    final Product binaryProduct = reader.readProductNodes(srcPath.toFile(), null);
+                    binaryProduct.setProductReader(reader);
+                    final Band dataBand = binaryProduct.getBand("data");
+                    dataBand.readPixels(0, 0, width, height, dataBuffer);
+                    binaryProduct.dispose();
+                } else {
+                    try {
+                        zarrArray.read(dataBuffer, shape, new int[]{0, 0});
+                    } catch (InvalidRangeException e) {
+                        throw new IOException("InvalidRangeException while reading tie point raster '" + rasterName + "'", e);
+                    }
                 }
                 final TiePointGrid tiePointGrid = new TiePointGrid(rasterName, width, height, offsetX, offsetY, subSamplingX, subSamplingY, dataBuffer);
                 if (attributes.containsKey(DISCONTINUITY)) {
@@ -103,8 +129,18 @@ public class ZarrProductReader extends AbstractProductReader {
                 final Band band = new Band(rasterName, snapDataType.getValue(), width, height);
                 product.addBand(band);
                 apply(attributes, band);
-                final ZarrOpImage zarrOpImage = new ZarrOpImage(band, shape, chunks, zarrArray, ResolutionLevel.MAXRES);
-                band.setSourceImage(zarrOpImage);
+                if (attributes != null && attributes.containsKey(ATTRIBUTE_NAME_BINARY_FORMAT)) {
+                    initBinaryReaderPlugin(attributes);
+                    final Path srcPath = rootPath.resolve(rasterName).resolve(rasterName + binaryFileExtension);
+                    final ProductReader reader = binaryReaderPlugIn.createReaderInstance();
+                    final Product binaryProduct = reader.readProductNodes(srcPath.toFile(), null);
+                    binaryProduct.setProductReader(reader);
+                    final Band dataBand = binaryProduct.getBand("data");
+                    band.setSourceImage(dataBand.getSourceImage());
+                } else {
+                    final ZarrOpImage zarrOpImage = new ZarrOpImage(band, shape, chunks, zarrArray, ResolutionLevel.MAXRES);
+                    band.setSourceImage(zarrOpImage);
+                }
             }
         }
         product.setFileLocation(rootPath.toFile());
@@ -112,6 +148,15 @@ public class ZarrProductReader extends AbstractProductReader {
         product.getSceneRasterSize();
         product.setModified(false);
         return product;
+    }
+
+    private void initBinaryReaderPlugin(Map<String, Object> attributes) {
+        if (binaryReaderPlugIn == null) {
+            final String binaryFormat = (String) attributes.get(ATTRIBUTE_NAME_BINARY_FORMAT);
+            binaryReaderPlugIn = ProductIO.getProductReader(binaryFormat).getReaderPlugIn();
+            binaryFileExtension = binaryReaderPlugIn.getDefaultFileExtensions()[0];
+            binaryProducts = new HashMap<>();
+        }
     }
 
     private String getRasterName(String arrayKey) {
@@ -184,11 +229,10 @@ public class ZarrProductReader extends AbstractProductReader {
                 band.setSampleCoding(indexCoding);
                 product.getIndexCodingGroup().add(indexCoding);
             } else {
-                Logger.getGlobal().warning(
-                        "Raster attributes for '" + rasterName
-                                + "' contains the attribute '" + FLAG_MEANINGS
-                                + "' but neither an attribute '" + FLAG_MASKS
-                                + "' nor an attribute '" + FLAG_VALUES + "'."
+                LOG.warning("Raster attributes for '" + rasterName
+                        + "' contains the attribute '" + FLAG_MEANINGS
+                        + "' but neither an attribute '" + FLAG_MASKS
+                        + "' nor an attribute '" + FLAG_VALUES + "'."
                 );
                 return;
             }

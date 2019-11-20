@@ -4,17 +4,25 @@ import com.bc.ceres.core.ProgressMonitor;
 import com.bc.ceres.glevel.MultiLevelImage;
 import com.bc.zarr.*;
 import org.esa.snap.core.dataio.AbstractProductWriter;
+import org.esa.snap.core.dataio.ProductIO;
+import org.esa.snap.core.dataio.ProductWriter;
+import org.esa.snap.core.dataio.ProductWriterPlugIn;
 import org.esa.snap.core.datamodel.*;
 import ucar.ma2.InvalidRangeException;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.*;
-import java.util.logging.Logger;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import static org.esa.snap.core.util.StringUtils.isNotNullAndNotEmpty;
+import static org.esa.snap.core.util.SystemUtils.LOG;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
 import static ucar.nc2.constants.CDM.TIME_END;
@@ -22,48 +30,37 @@ import static ucar.nc2.constants.CDM.TIME_START;
 
 public class ZarrProductWriter extends AbstractProductWriter {
 
-    private final HashMap<String, ZarrArray> zarrWriters = new HashMap<>();
-    private ThreadPoolExecutor _executorService;
-    private Compressor _compressor;
+    public static final int DEFAULT_NUM_THREADS = 1;
+
+    private final HashMap<Band, BinaryWriter> zarrWriters = new HashMap<>();
+    private final Compressor compressor;
+    private final ThreadPoolExecutor executorService;
+    private final ProductWriterPlugIn binaryWriterPlugIn;
     private ZarrGroup zarrGroup;
-//    private int[] preferredChunks;
-//    private int submitThreshold;
+    private Path outputRoot;
 
     public ZarrProductWriter(final ZarrProductWriterPlugIn productWriterPlugIn) {
         super(productWriterPlugIn);
-        _compressor = CompressorFactory.create("zlib", 3);
-        setNumTreads(8);
+        compressor = CompressorFactory.create("zlib", getCompressionLevel(3));
+        final int threads = getNumWritingThreads(DEFAULT_NUM_THREADS);
+        executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(threads > 0 ? threads : DEFAULT_NUM_THREADS);
+        binaryWriterPlugIn = getBinaryWriterPlugin(productWriterPlugIn);
     }
 
     @Override
     public void writeBandRasterData(Band sourceBand, int sourceOffsetX, int sourceOffsetY, int sourceWidth, int sourceHeight, ProductData sourceBuffer, ProgressMonitor pm) throws IOException {
-        String name = sourceBand.getName();
-        final ZarrArray zarrArray = zarrWriters.get(name);
+        final BinaryWriter binaryWriter = zarrWriters.get(sourceBand);
         final int[] to = {sourceOffsetY, sourceOffsetX}; // common data model manner { y, x }
         final int[] shape = {sourceHeight, sourceWidth};  // common data model manner { y, x }
         Callable<Object> callable = () -> {
             try {
-                final ProductData scaledBuffer;
-                if (sourceBand.isLog10Scaled()) {
-                    scaledBuffer = toScaledFloats(sourceBand, sourceBuffer);
-                } else {
-                    scaledBuffer = sourceBuffer;
-                }
-                zarrArray.write(scaledBuffer.getElems(), shape, to);
+                binaryWriter.write(ensureNotLogarithmicData(sourceBand, sourceBuffer), shape, to);
                 return null;
             } catch (InvalidRangeException e) {
-                throw new IOException("Invalid range while writing raster '" + name + "'", e);
+                throw new IOException("Invalid range while writing raster '" + sourceBand.getName() + "'", e);
             }
         };
-//        int activeCount = _executorService.getActiveCount();
-//        while (activeCount >= submitThreshold) {
-//            try {
-//                Thread.sleep(200);
-//                activeCount = _executorService.getActiveCount();
-//            } catch (InterruptedException ignored) {
-//            }
-//        }
-        _executorService.submit(callable);
+        executorService.submit(callable);
     }
 
     @Override
@@ -73,10 +70,14 @@ public class ZarrProductWriter extends AbstractProductWriter {
     @Override
     public void close() throws IOException {
         try {
-            _executorService.shutdown();
-            _executorService.awaitTermination(Integer.MAX_VALUE, TimeUnit.SECONDS);
+            executorService.shutdown();
+            executorService.awaitTermination(Integer.MAX_VALUE, TimeUnit.SECONDS);
         } catch (InterruptedException ignored) {
         }
+        for (BinaryWriter value : zarrWriters.values()) {
+            value.dispose();
+        }
+        zarrWriters.clear();
     }
 
     @Override
@@ -84,25 +85,12 @@ public class ZarrProductWriter extends AbstractProductWriter {
         throw new RuntimeException("not implemented");
     }
 
-    public void setCompressor(Compressor compressor) {
-        _compressor = compressor;
-    }
-
-    public void setNumTreads(int numTreads) {
-        _executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(numTreads > 0 ? numTreads : 1);
-//        submitThreshold = numTreads;
-    }
-
     @Override
     protected void writeProductNodesImpl() throws IOException {
-        final Path output = convertToPath(getOutput());
+        outputRoot = convertToPath(getOutput());
         final Product product = getSourceProduct();
-//        final Dimension preferredTileSize = ImageManager.getPreferredTileSize(product);
 
-        // common data model manner { y, x }
-//        preferredChunks = new int[]{preferredTileSize.height, preferredTileSize.width};
-
-        zarrGroup = ZarrGroup.create(output, getProductAttributes(product));
+        zarrGroup = ZarrGroup.create(outputRoot, collectProductAttributes(product));
         for (TiePointGrid tiePointGrid : product.getTiePointGrids()) {
             writeTiePointGrid(tiePointGrid);
         }
@@ -111,7 +99,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
         }
     }
 
-    static Map<String, Object> getProductAttributes(Product product) {
+    static Map<String, Object> collectProductAttributes(Product product) {
         final Map<String, Object> productAttributes = new HashMap<>();
         productAttributes.put(PRODUCT_NAME, product.getName());
         productAttributes.put(PRODUCT_TYPE, product.getProductType());
@@ -133,14 +121,16 @@ public class ZarrProductWriter extends AbstractProductWriter {
     }
 
     static void collectBandAttributes(Band band, Map<String, Object> attributes) {
-        // TODO: 21.07.2019 SE -- units for bandwidth, wavelength, solarFlux
         if (band.getSpectralBandwidth() > 0) {
             attributes.put(BANDWIDTH, band.getSpectralBandwidth());
+            attributes.put(BANDWIDTH + UNIT_EXTENSION, BANDWIDTH_UNIT);
         }
         if (band.getSpectralWavelength() > 0) {
             attributes.put(WAVELENGTH, band.getSpectralWavelength());
+            attributes.put(WAVELENGTH + UNIT_EXTENSION, WAVELENGTH_UNIT);
         }
         if (band.getSolarFlux() > 0) {
+            // TODO: 15.11.2019 SE -- unit for solarFlux
             attributes.put(SOLAR_FLUX, band.getSolarFlux());
         }
         if ((float) band.getSpectralBandIndex() >= 0) {
@@ -150,14 +140,16 @@ public class ZarrProductWriter extends AbstractProductWriter {
         collectSampleCodingAttributes(band, attributes);
     }
 
-    static ProductData toScaledFloats(Band sourceBand, ProductData sourceBuffer) {
-        ProductData scaledBuffer;
-        scaledBuffer = ProductData.createInstance(ProductData.TYPE_FLOAT32, sourceBuffer.getNumElems());
-        for (int i = 0; i < sourceBuffer.getNumElems(); i++) {
-            double rawDouble = sourceBuffer.getElemDoubleAt(i);
-            scaledBuffer.setElemDoubleAt(i, sourceBand.scale(rawDouble));
+    private ProductData ensureNotLogarithmicData(Band sourceBand, ProductData data) {
+        final boolean log10Scaled = sourceBand.isLog10Scaled();
+        if (!log10Scaled) {
+            return data;
         }
-        return scaledBuffer;
+        final ProductData scaledData = ProductData.createInstance(ProductData.TYPE_FLOAT32, data.getNumElems());
+        for (int i = 0; i < data.getNumElems(); i++) {
+            scaledData.setElemDoubleAt(i, sourceBand.scale(data.getElemDoubleAt(i)));
+        }
+        return scaledData;
     }
 
     private static void collectSampleCodingAttributes(Band band, Map<String, Object> attributes) {
@@ -171,7 +163,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
         final boolean indexBand = band.isIndexBand();
         final boolean flagBand = band.isFlagBand();
         if (!(indexBand || flagBand)) {
-            Logger.getGlobal().warning("Band references a SampleCoding but this is neither an IndexCoding nor a FlagCoding.");
+            LOG.warning("Band references a SampleCoding but this is neither an IndexCoding nor a FlagCoding.");
             return;
         }
 
@@ -254,7 +246,6 @@ public class ZarrProductWriter extends AbstractProductWriter {
             return com.bc.zarr.DataType.f4;
         }
         final int dataType = node.getDataType();
-//        final int dataType = node.getGeophysicalDataType();
         switch (dataType) {
             case ProductData.TYPE_FLOAT64:
                 return DataType.f8;
@@ -277,40 +268,95 @@ public class ZarrProductWriter extends AbstractProductWriter {
         }
     }
 
+    private int getCompressionLevel(int defaultCompressionLevel) {
+        final String value = System.getProperty(PROPERTY_NAME_COMPRESSON_LEVEL, "" + defaultCompressionLevel);
+        final int compressionLevel = Integer.parseInt(value);
+        if (compressionLevel != defaultCompressionLevel) {
+            LOG.info("Znap format product writer will use " + compressionLevel + " compression level.");
+        }
+        return compressionLevel;
+    }
+
+    private int getNumWritingThreads(int defaultValue) {
+        final int maxNumWritingThreads = Integer.parseInt(System.getProperty(PROPERTY_NAME_MAX_WRITE_THREADS, "" + defaultValue));
+        if (maxNumWritingThreads != defaultValue) {
+            LOG.info("Znap format product writer will use " + maxNumWritingThreads + " threads to write data.");
+        }
+        return maxNumWritingThreads;
+    }
+
+    private ProductWriterPlugIn getBinaryWriterPlugin(ZarrProductWriterPlugIn productWriterPlugIn) {
+        String defaultBinaryFormatName = productWriterPlugIn.getFormatNames()[0];
+        final String binaryFormatName = System.getProperty(PROPERTY_NAME_BINARY_FORMAT, defaultBinaryFormatName);
+        if (defaultBinaryFormatName.equals(binaryFormatName)) {
+            return null;
+        }
+        LOG.info("Binary data in Znap format should be written as '" + binaryFormatName + "'");
+        final ProductWriterPlugIn writerPlugIn = ProductIO.getProductWriter(binaryFormatName).getWriterPlugIn();
+        if (writerPlugIn == null) {
+            throw new IllegalArgumentException("Unable to write binary data as '" + binaryFormatName + "'.");
+        }
+        return writerPlugIn;
+    }
+
+
     private void writeTiePointGrid(TiePointGrid tiePointGrid) throws IOException {
         final int[] shape = {tiePointGrid.getGridHeight(), tiePointGrid.getGridWidth()}; // common data model manner { y, x }
         final String name = tiePointGrid.getName();
+        final Map<String, Object> attributes = collectTiePointGridAttributes(tiePointGrid);
+        final ArrayParams arrayParams = new ArrayParams()
+                .dataType(getZarrDataType(tiePointGrid))
+                .shape(shape)
+                .fillValue(getZarrFillValue(tiePointGrid))
+                .compressor(compressor);
+        final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParams, attributes);
+
         final ProductData gridData;
-        final boolean hasData = tiePointGrid.getData() != null;
-        if (hasData) {
+        if (tiePointGrid.hasRasterData()) {
             gridData = tiePointGrid.getData();
         } else {
             gridData = readTiePointGridData(tiePointGrid);
         }
-//        int[] chunks = Arrays.copyOf(preferredChunks, preferredChunks.length);
+        if (binaryWriterPlugIn == null) {
+            try {
+                zarrArray.write(gridData.getElems(), shape, new int[]{0, 0});
+            } catch (InvalidRangeException e) {
+                throw new IOException("Invalid range while writing raster '" + name + "'", e);
+            }
+        } else {
+            final ProductWriter writer = createBinaryProductWriter();
+            final Product binaryProduct = new Product("_" + name + "_", "binary", shape[IDX_WIDTH], shape[IDX_HEIGHT]);
+            final Band binaryBand = binaryProduct.addBand("data", getSnapDataType(zarrArray.getDataType()).getValue());
+            final String fileExtension = binaryWriterPlugIn.getDefaultFileExtensions()[0];
+            final Path path = outputRoot.resolve(name).resolve(name + fileExtension);
+            writer.writeProductNodes(binaryProduct, path.toFile());
+            binaryProduct.setProductWriter(writer);
+            binaryBand.writeRasterData(0, 0, shape[IDX_WIDTH], shape[IDX_HEIGHT], gridData);
+            binaryProduct.dispose();
+        }
+    }
+
+    private ProductWriter createBinaryProductWriter() {
+        final ProductWriter writer = binaryWriterPlugIn.createWriterInstance();
+        switchToIntermediateMode(writer);
+        return writer;
+    }
+
+    private Map<String, Object> collectTiePointGridAttributes(TiePointGrid tiePointGrid) {
         final Map<String, Object> attributes = new HashMap<>();
         collectRasterAttributes(tiePointGrid, attributes);
         attributes.put(OFFSET_X, tiePointGrid.getOffsetX());
         attributes.put(OFFSET_Y, tiePointGrid.getOffsetY());
         attributes.put(SUBSAMPLING_X, tiePointGrid.getSubSamplingX());
         attributes.put(SUBSAMPLING_Y, tiePointGrid.getSubSamplingY());
+        if (binaryWriterPlugIn != null) {
+            attributes.put(ATTRIBUTE_NAME_BINARY_FORMAT, binaryWriterPlugIn.getFormatNames()[0]);
+        }
         final int discontinuity = tiePointGrid.getDiscontinuity();
         if (discontinuity != TiePointGrid.DISCONT_NONE) {
             attributes.put(DISCONTINUITY, discontinuity);
         }
-//        trimChunks(chunks, shape);
-        final ArrayParams arrayParams = new ArrayParams()
-                .dataType(getZarrDataType(tiePointGrid))
-                .shape(shape)
-//                .chunks(chunks)
-                .fillValue(getZarrFillValue(tiePointGrid))
-                .compressor(_compressor);
-        final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParams, attributes);
-        try {
-            zarrArray.write(gridData.getElems(), shape, new int[]{0, 0});
-        } catch (InvalidRangeException e) {
-            throw new IOException("Invalid range while writing raster '" + name + "'", e);
-        }
+        return attributes;
     }
 
     private void trimChunks(int[] chunks, int[] shape) {
@@ -324,31 +370,63 @@ public class ZarrProductWriter extends AbstractProductWriter {
     private void initializeZarrBandWriter(Band band) throws IOException {
         final int[] shape = {band.getRasterHeight(), band.getRasterWidth()}; // common data model manner { y, x }
         final String name = band.getName();
-        int[] chunks;
-        MultiLevelImage sourceImage = band.getSourceImage();
-        chunks = new int[]{sourceImage.getTileHeight(), sourceImage.getTileWidth()}; // common data model manner { y, x }
-//        if (band.isSourceImageSet()) {
-//            final MultiLevelImage sourceImage = band.getSourceImage();
-//            chunks = new int[]{sourceImage.getTileHeight(), sourceImage.getTileWidth()}; // common data model manner { y, x }
-//        } else {
-//            System.out.println("Use preferred chunks for band '" + name + "'");
-//            chunks = Arrays.copyOf(preferredChunks, preferredChunks.length);
-//        }
-        trimChunks(chunks, shape);
         final ArrayParams arrayParams = new ArrayParams()
                 .dataType(getZarrDataType(band))
                 .shape(shape)
-                .chunks(chunks)
                 .fillValue(getZarrFillValue(band))
-                .compressor(_compressor);
-        final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParams, getBandAttributes(band));
-        zarrWriters.put(name, zarrArray);
+                .compressor(compressor);
+        if (binaryWriterPlugIn == null) {
+            int[] chunks;
+            MultiLevelImage sourceImage = band.getSourceImage();
+            chunks = new int[]{sourceImage.getTileHeight(), sourceImage.getTileWidth()}; // common data model manner { y, x }
+            trimChunks(chunks, shape);
+            arrayParams.chunks(chunks);
+        } else {
+            arrayParams.chunked(false);
+        }
+        final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParams, collectBandAttributes(band));
+        final BinaryWriter binaryWriter;
+        if (binaryWriterPlugIn == null) {
+            binaryWriter = new StandardZarrChunksWriter(zarrArray);
+        } else {
+            final ProductWriter writer = createBinaryProductWriter();
+            final Product binaryProduct = new Product("_" + name + "_", "binary", shape[IDX_WIDTH], shape[IDX_HEIGHT]);
+            final GeoCoding geoCoding = band.getGeoCoding();
+            if (geoCoding instanceof CrsGeoCoding) {
+                binaryProduct.setSceneGeoCoding(geoCoding);
+            }
+            final Band binaryBand = binaryProduct.addBand("data", getSnapDataType(zarrArray.getDataType()).getValue());
+            final String fileExtension = binaryWriterPlugIn.getDefaultFileExtensions()[0];
+            final Path path = outputRoot.resolve(name).resolve(name + fileExtension);
+            writer.writeProductNodes(binaryProduct, path.toFile());
+            binaryProduct.setProductWriter(writer);
+            binaryWriter = new UserDefinedBinaryWriter(binaryBand);
+        }
+        zarrWriters.put(band, binaryWriter);
     }
 
-    static Map<String, Object> getBandAttributes(Band band) {
+    private void switchToIntermediateMode(ProductWriter writer) {
+        final Class<? extends ProductWriter> writerClass = writer.getClass();
+        if (!writerClass.getName().contains("BigGeoTiffProductWriter")) {
+            return;
+        }
+        try {
+            final Method setWriteIntermediateProduct = writerClass.getDeclaredMethod("setWriteIntermediateProduct", boolean.class);
+            setWriteIntermediateProduct.setAccessible(true);
+            setWriteIntermediateProduct.invoke(writer, true);
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+            throw new IllegalStateException(
+                    "Unable to switch on 'writeIntermediateProduct' on binary product writer '" + binaryWriterPlugIn.getFormatNames()[0] + "'.", e);
+        }
+    }
+
+    private Map<String, Object> collectBandAttributes(Band band) {
         final Map<String, Object> bandAttributes = new HashMap<>();
         collectRasterAttributes(band, bandAttributes);
         collectBandAttributes(band, bandAttributes);
+        if (binaryWriterPlugIn != null) {
+            bandAttributes.put(ATTRIBUTE_NAME_BINARY_FORMAT, binaryWriterPlugIn.getFormatNames()[0]);
+        }
         return bandAttributes;
     }
 
@@ -423,7 +501,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
     // implement geocoding part for product
     // and for Band too
 
-//    private void encodeGeoCoding(NFileWriteable ncFile, Band band, Product product, NVariable variable) throws IOException {
+    //    private void encodeGeoCoding(NFileWriteable ncFile, Band band, Product product, NVariable variable) throws IOException {
 //        final GeoCoding geoCoding = band.getGeoCoding();
 //        if (!geoCoding.equals(product.getSceneGeoCoding())) {
 //            if (geoCoding instanceof TiePointGeoCoding) {
@@ -450,4 +528,46 @@ public class ZarrProductWriter extends AbstractProductWriter {
 //            }
 //        }
 //    }
+
+    private interface BinaryWriter {
+        void write(ProductData data, int[] dataShape, int[] offset) throws IOException, InvalidRangeException;
+
+        void dispose();
+    }
+
+    private static class StandardZarrChunksWriter implements BinaryWriter {
+        private final ZarrArray zarrArray;
+
+        public StandardZarrChunksWriter(ZarrArray zarrArray) {
+            this.zarrArray = zarrArray;
+        }
+
+        @Override
+        public void write(ProductData data, int[] dataShape, int[] offset) throws IOException, InvalidRangeException {
+            zarrArray.write(data.getElems(), dataShape, offset);
+        }
+
+        @Override
+        public void dispose() {
+        }
+    }
+
+    private static class UserDefinedBinaryWriter implements BinaryWriter {
+        private final Band binaryBand;
+
+        public UserDefinedBinaryWriter(Band binaryBand) {
+            this.binaryBand = binaryBand;
+        }
+
+        @Override
+        public void write(ProductData data, int[] dataShape, int[] offset) throws IOException, InvalidRangeException {
+            binaryBand.writeRasterData(offset[IDX_X], offset[IDX_Y], dataShape[IDX_WIDTH], dataShape[IDX_HEIGHT], data);
+        }
+
+        @Override
+        public void dispose() {
+            final Product product = binaryBand.getProduct();
+            product.dispose();
+        }
+    }
 }

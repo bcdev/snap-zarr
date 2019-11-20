@@ -24,11 +24,22 @@ import java.nio.file.Paths;
 
 final class ZnapConstantsAndUtils {
 
+    public static final String PROPERTY_NAME_COMPRESSON_LEVEL = "znap.compresson.level";
+    public static final String PROPERTY_NAME_MAX_WRITE_THREADS = "znap.num.write.threads";
+    public static final String PROPERTY_NAME_BINARY_FORMAT = "znap.binary.format";
+    public static final String ATTRIBUTE_NAME_BINARY_FORMAT = PROPERTY_NAME_BINARY_FORMAT.replace(".", "_");
+    public static final int IDX_WIDTH = 1;
+    public static final int IDX_X = IDX_WIDTH;
+    public static final int IDX_HEIGHT = 0;
+    public static final int IDX_Y = IDX_HEIGHT;
     static final String FORMAT_NAME = "SNAP-Zarr";
     static final String SNAP_ZARR_CONTAINER_EXTENSION = ".znap";
 
+    public static final String UNIT_EXTENSION = "_unit";
     public static final String BANDWIDTH = "bandwidth";
+    public static final String BANDWIDTH_UNIT = "nm";
     public static final String WAVELENGTH = "wavelength";
+    public static final String WAVELENGTH_UNIT = "nm";
     public static final String VALID_PIXEL_EXPRESSION = "valid_pixel_expression";
     public static final String QUICKLOOK_BAND_NAME = "quicklook_band_name";
     public static final String SOLAR_FLUX = "solar_flux";
@@ -111,5 +122,4 @@ final class ZnapConstantsAndUtils {
             throw new IllegalStateException();
         }
     }
-
 }

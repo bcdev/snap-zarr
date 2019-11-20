@@ -30,7 +30,7 @@ public class ZarrProductReaderTest_applySpectralAttributes {
         //preparation
         sourceBand.setSpectralBandwidth(123.4f);
         ZarrProductWriter.collectBandAttributes(sourceBand, attributes);
-        assertThat(attributes.size(), is(1));
+        assertThat(attributes.size(), is(2));
         //execution
         ZarrProductReader.apply(attributes, targetBand);
         //verification
@@ -42,7 +42,7 @@ public class ZarrProductReaderTest_applySpectralAttributes {
         //preparation
         sourceBand.setSpectralWavelength(234.5f);
         ZarrProductWriter.collectBandAttributes(sourceBand, attributes);
-        assertThat(attributes.size(), is(1));
+        assertThat(attributes.size(), is(2));
         //execution
         ZarrProductReader.apply(attributes, targetBand);
         //verification
