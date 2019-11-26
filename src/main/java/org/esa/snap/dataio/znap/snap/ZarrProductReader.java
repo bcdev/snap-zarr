@@ -11,15 +11,25 @@ import org.esa.snap.core.dataio.AbstractProductReader;
 import org.esa.snap.core.dataio.ProductIO;
 import org.esa.snap.core.dataio.ProductReader;
 import org.esa.snap.core.dataio.ProductReaderPlugIn;
+import org.esa.snap.core.dataio.dimap.DimapProductConstants;
 import org.esa.snap.core.datamodel.*;
 import org.esa.snap.core.image.ResolutionLevel;
+import org.esa.snap.core.util.Debug;
+import org.geotools.referencing.CRS;
+import org.geotools.referencing.factory.ReferencingObjectFactory;
+import org.opengis.referencing.FactoryException;
+import org.opengis.referencing.crs.CoordinateReferenceSystem;
+import org.opengis.referencing.operation.TransformException;
 import ucar.ma2.InvalidRangeException;
 
+import java.awt.*;
+import java.awt.geom.AffineTransform;
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.*;
+import java.util.List;
 
 import static org.esa.snap.core.util.SystemUtils.LOG;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
@@ -32,6 +42,8 @@ public class ZarrProductReader extends AbstractProductReader {
     private ProductReaderPlugIn binaryReaderPlugIn;
     private String binaryFileExtension;
     private HashMap<DataNode, Product> binaryProducts;
+    private Map<ProductNode, Map<String, Object>> nodeAttributes = new HashMap<>();
+    private Map<Map, GeoCoding> sharedGeoCodings = new HashMap<>();
 
     protected ZarrProductReader(ProductReaderPlugIn readerPlugIn) {
         super(readerPlugIn);
@@ -61,12 +73,12 @@ public class ZarrProductReader extends AbstractProductReader {
         final ZarrGroup rootGroup = ZarrGroup.open(rootPath);
         final Map<String, Object> productAttributes = rootGroup.getAttributes();
 
-        final String productName = (String) productAttributes.get(PRODUCT_NAME);
-        final String productType = (String) productAttributes.get(PRODUCT_TYPE);
-        final String productDesc = (String) productAttributes.get(PRODUCT_DESC);
+        final String productName = (String) productAttributes.get(ATT_NAME_PRODUCT_NAME);
+        final String productType = (String) productAttributes.get(ATT_NAME_PRODUCT_TYPE);
+        final String productDesc = (String) productAttributes.get(ATT_NAME_PRODUCT_DESC);
         final ProductData.UTC sensingStart = getTime(productAttributes, TIME_START, rootPath); // "time_coverage_start"
         final ProductData.UTC sensingStop = getTime(productAttributes, TIME_END, rootPath); // "time_coverage_end"
-        final String product_metadata = (String) productAttributes.get(PRODUCT_METADATA);
+        final String product_metadata = (String) productAttributes.get(ATT_NAME_PRODUCT_METADATA);
         final ArrayList<MetadataElement> metadataElements = toMetadataElements(product_metadata);
         final Product product = new Product(productName, productType, this);
         product.setDescription(productDesc);
@@ -98,13 +110,13 @@ public class ZarrProductReader extends AbstractProductReader {
 
             final Map<String, Object> attributes = zarrArray.getAttributes();
 
-            if (attributes != null && attributes.containsKey(OFFSET_X)) {
-                final double offsetX = (double) attributes.get(OFFSET_X);
-                final double offsetY = (double) attributes.get(OFFSET_Y);
-                final double subSamplingX = (double) attributes.get(SUBSAMPLING_X);
-                final double subSamplingY = (double) attributes.get(SUBSAMPLING_Y);
+            if (attributes != null && attributes.containsKey(ATT_NAME_OFFSET_X)) {
+                final double offsetX = (double) attributes.get(ATT_NAME_OFFSET_X);
+                final double offsetY = (double) attributes.get(ATT_NAME_OFFSET_Y);
+                final double subSamplingX = (double) attributes.get(ATT_NAME_SUBSAMPLING_X);
+                final double subSamplingY = (double) attributes.get(ATT_NAME_SUBSAMPLING_Y);
                 final float[] dataBuffer = new float[width * height];
-                if (attributes != null && attributes.containsKey(ATTRIBUTE_NAME_BINARY_FORMAT)) {
+                if (attributes != null && attributes.containsKey(ATT_NAME_BINARY_FORMAT)) {
                     initBinaryReaderPlugin(attributes);
                     final Path srcPath = rootPath.resolve(rasterName).resolve(rasterName + binaryFileExtension);
                     final ProductReader reader = binaryReaderPlugIn.createReaderInstance();
@@ -125,11 +137,13 @@ public class ZarrProductReader extends AbstractProductReader {
                     tiePointGrid.setDiscontinuity(((Number) attributes.get(DISCONTINUITY)).intValue());
                 }
                 product.addTiePointGrid(tiePointGrid);
+                nodeAttributes.put(tiePointGrid, attributes);
             } else {
                 final Band band = new Band(rasterName, snapDataType.getValue(), width, height);
                 product.addBand(band);
+                nodeAttributes.put(band, attributes);
                 apply(attributes, band);
-                if (attributes != null && attributes.containsKey(ATTRIBUTE_NAME_BINARY_FORMAT)) {
+                if (attributes != null && attributes.containsKey(ATT_NAME_BINARY_FORMAT)) {
                     initBinaryReaderPlugin(attributes);
                     final Path srcPath = rootPath.resolve(rasterName).resolve(rasterName + binaryFileExtension);
                     final ProductReader reader = binaryReaderPlugIn.createReaderInstance();
@@ -147,12 +161,104 @@ public class ZarrProductReader extends AbstractProductReader {
         product.setProductReader(this);
         product.getSceneRasterSize();
         product.setModified(false);
+        addGeocodings(productAttributes, product);
         return product;
+    }
+
+    private void addGeocodings(Map<String, Object> productAttributes, Product product) throws IOException {
+        addGeoCoding(product, productAttributes, product::setSceneGeoCoding);
+        final List<RasterDataNode> rasterDataNodes = product.getRasterDataNodes();
+        for (RasterDataNode rasterDataNode : rasterDataNodes) {
+            final Map<String, Object> attibutes = nodeAttributes.get(rasterDataNode);
+            addGeoCoding(rasterDataNode, attibutes, rasterDataNode::setGeoCoding);
+        }
+    }
+
+    private void addGeoCoding(ProductNode node, Map<String, Object> attributes, GeocodingSetter gcSetter) throws IOException {
+        if (!attributes.containsKey(ATT_NAME_GEOCODING)) {
+            return;
+        }
+        final Map gcAttribs = (Map) attributes.get(ATT_NAME_GEOCODING);
+        if (gcAttribs == null) {
+            return;
+        }
+        if (!gcAttribs.containsKey(ATT_NAME_GEOCODING_SHARED)) {
+            gcSetter.setGeocoding(createGeoCoding(node, gcAttribs));
+            return;
+        }
+        final GeoCoding geoCoding;
+        if (sharedGeoCodings.containsKey(gcAttribs)) {
+            geoCoding = sharedGeoCodings.get(gcAttribs);
+        } else {
+            geoCoding = createGeoCoding(node, gcAttribs);
+            sharedGeoCodings.put(gcAttribs, geoCoding);
+        }
+        gcSetter.setGeocoding(geoCoding);
+    }
+
+    interface GeocodingSetter {
+        void setGeocoding(GeoCoding gc);
+    }
+
+    GeoCoding createGeoCoding(ProductNode node, Map gcAttribs) throws IOException {
+        final String type = (String) gcAttribs.get("type");
+        LOG.info("------------------------------------------------------------------------");
+        if (TiePointGeoCoding.class.getSimpleName().equals(type)) {
+            LOG.info("create " + TiePointGeoCoding.class.getSimpleName() + " for " + node.getName());
+            final TiePointGrid lat = node.getProduct().getTiePointGrid((String) gcAttribs.get("latGridName"));
+            final TiePointGrid lon = node.getProduct().getTiePointGrid((String) gcAttribs.get("lonGridName"));
+            final String geoCRS_wkt = (String) gcAttribs.get("geoCRS_WKT");
+            if (geoCRS_wkt != null) {
+                final ReferencingObjectFactory factory = new ReferencingObjectFactory();
+                try {
+                    final CoordinateReferenceSystem geoCRS = factory.createFromWKT(geoCRS_wkt);
+                    return new TiePointGeoCoding(lat, lon, geoCRS);
+                } catch (FactoryException e) {
+                    throw new IOException("Unable to create scene geocoding.", e);
+                }
+            } else {
+                return new TiePointGeoCoding(lat, lon);
+            }
+        } else if (CrsGeoCoding.class.getSimpleName().equals(type)) {
+            LOG.info("create " + CrsGeoCoding.class.getSimpleName() + " for " + node.getName());
+            final int width;
+            final int height;
+            if (node instanceof RasterDataNode) {
+                final RasterDataNode rasterDataNode = (RasterDataNode) node;
+                width = rasterDataNode.getRasterWidth();
+                height = rasterDataNode.getRasterHeight();
+            } else {
+                width = node.getProduct().getSceneRasterWidth();
+                height = node.getProduct().getSceneRasterHeight();
+            }
+            LOG.info("width = " + width);
+            LOG.info("height = " + height);
+            try {
+                final String wkt = (String) gcAttribs.get(DimapProductConstants.TAG_WKT);
+                LOG.info("wkt = " + wkt);
+                final CoordinateReferenceSystem crs = CRS.parseWKT(wkt);
+
+                final List matrix = (List) gcAttribs.get(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM);
+                LOG.info("matrix = " + Arrays.toString(matrix.toArray()));
+
+                final double[] ma = new double[matrix.size()];
+                for (int i = 0; i < matrix.size(); i++) {
+                    ma[i] = (double) matrix.get(i);
+                }
+                final AffineTransform i2m = new AffineTransform(ma);
+                Rectangle imageBounds = new Rectangle(width,
+                        height);
+                return new CrsGeoCoding(crs, imageBounds, i2m);
+            } catch (FactoryException | TransformException e) {
+                Debug.trace(e);
+            }
+        }
+        return null;
     }
 
     private void initBinaryReaderPlugin(Map<String, Object> attributes) {
         if (binaryReaderPlugIn == null) {
-            final String binaryFormat = (String) attributes.get(ATTRIBUTE_NAME_BINARY_FORMAT);
+            final String binaryFormat = (String) attributes.get(ATT_NAME_BINARY_FORMAT);
             binaryReaderPlugIn = ProductIO.getProductReader(binaryFormat).getReaderPlugIn();
             binaryFileExtension = binaryReaderPlugIn.getDefaultFileExtensions()[0];
             binaryProducts = new HashMap<>();

@@ -27,11 +27,12 @@ final class ZnapConstantsAndUtils {
     public static final String PROPERTY_NAME_COMPRESSON_LEVEL = "znap.compresson.level";
     public static final String PROPERTY_NAME_MAX_WRITE_THREADS = "znap.num.write.threads";
     public static final String PROPERTY_NAME_BINARY_FORMAT = "znap.binary.format";
-    public static final String ATTRIBUTE_NAME_BINARY_FORMAT = PROPERTY_NAME_BINARY_FORMAT.replace(".", "_");
+
     public static final int IDX_WIDTH = 1;
     public static final int IDX_X = IDX_WIDTH;
     public static final int IDX_HEIGHT = 0;
     public static final int IDX_Y = IDX_HEIGHT;
+
     static final String FORMAT_NAME = "SNAP-Zarr";
     static final String SNAP_ZARR_CONTAINER_EXTENSION = ".znap";
 
@@ -47,7 +48,9 @@ final class ZnapConstantsAndUtils {
 
     public static final String NO_DATA_VALUE_USED = "no_data_value_used";
 
-    public static final String GEOCODING = "geocoding";
+    public static final String ATT_NAME_BINARY_FORMAT = PROPERTY_NAME_BINARY_FORMAT.replace(".", "_");
+    public static final String ATT_NAME_GEOCODING = "geocoding";
+    public static final String ATT_NAME_GEOCODING_SHARED = "shared";
     public static final int LON_INDEX = 0;
     public static final int LAT_INDEX = 1;
 
@@ -61,16 +64,16 @@ final class ZnapConstantsAndUtils {
     public static final String FLAG_DESCRIPTIONS = "flag_descriptions";
 
     // Product header keys
-    public static final String PRODUCT_NAME = "product_name";
-    public static final String PRODUCT_TYPE = "product_type";
-    public static final String PRODUCT_DESC = "product_description";
-    public static final String PRODUCT_METADATA = "product_metadata";
+    public static final String ATT_NAME_PRODUCT_NAME = "product_name";
+    public static final String ATT_NAME_PRODUCT_TYPE = "product_type";
+    public static final String ATT_NAME_PRODUCT_DESC = "product_description";
+    public static final String ATT_NAME_PRODUCT_METADATA = "product_metadata";
 
     // Tie point grid attribute names
-    public static final String OFFSET_X = "offset_x";
-    public static final String OFFSET_Y = "offset_y";
-    public static final String SUBSAMPLING_X = "subsampling_x";
-    public static final String SUBSAMPLING_Y = "subsampling_y";
+    public static final String ATT_NAME_OFFSET_X = "offset_x";
+    public static final String ATT_NAME_OFFSET_Y = "offset_y";
+    public static final String ATT_NAME_SUBSAMPLING_X = "subsampling_x";
+    public static final String ATT_NAME_SUBSAMPLING_Y = "subsampling_y";
 
     // Sample Coding
     public static final String NAME_SAMPLE_CODING = "name_sample_coding";

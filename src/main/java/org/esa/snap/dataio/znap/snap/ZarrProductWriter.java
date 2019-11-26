@@ -7,15 +7,18 @@ import org.esa.snap.core.dataio.AbstractProductWriter;
 import org.esa.snap.core.dataio.ProductIO;
 import org.esa.snap.core.dataio.ProductWriter;
 import org.esa.snap.core.dataio.ProductWriterPlugIn;
+import org.esa.snap.core.dataio.dimap.DimapProductConstants;
 import org.esa.snap.core.datamodel.*;
+import org.opengis.referencing.crs.CoordinateReferenceSystem;
+import org.opengis.referencing.operation.MathTransform;
 import ucar.ma2.InvalidRangeException;
 
+import java.awt.geom.AffineTransform;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -38,6 +41,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
     private final ProductWriterPlugIn binaryWriterPlugIn;
     private ZarrGroup zarrGroup;
     private Path outputRoot;
+    private List<GeoCoding> sharedGeoCodings;
 
     public ZarrProductWriter(final ZarrProductWriterPlugIn productWriterPlugIn) {
         super(productWriterPlugIn);
@@ -89,8 +93,8 @@ public class ZarrProductWriter extends AbstractProductWriter {
     protected void writeProductNodesImpl() throws IOException {
         outputRoot = convertToPath(getOutput());
         final Product product = getSourceProduct();
-
-        zarrGroup = ZarrGroup.create(outputRoot, collectProductAttributes(product));
+        sharedGeoCodings = collectSharedGeoCodings(product);
+        zarrGroup = ZarrGroup.create(outputRoot, collectProductAttributes());
         for (TiePointGrid tiePointGrid : product.getTiePointGrids()) {
             writeTiePointGrid(tiePointGrid);
         }
@@ -99,17 +103,48 @@ public class ZarrProductWriter extends AbstractProductWriter {
         }
     }
 
-    static Map<String, Object> collectProductAttributes(Product product) {
+    static List<GeoCoding> collectSharedGeoCodings(Product product) {
+        final Map<GeoCoding, Integer> counts = new HashMap<>();
+        final GeoCoding sceneGeoCoding = product.getSceneGeoCoding();
+        if (sceneGeoCoding != null) {
+            counts.put(sceneGeoCoding, 1);
+        }
+        final List<RasterDataNode> rasterDataNodes = product.getRasterDataNodes();
+        for (RasterDataNode rasterDataNode : rasterDataNodes) {
+            final GeoCoding geoCoding = rasterDataNode.getGeoCoding();
+            if (geoCoding != null) {
+                if (counts.containsKey(geoCoding)) {
+                    int count = counts.get(geoCoding);
+                    counts.put(geoCoding, ++count);
+                } else {
+                    counts.put(geoCoding, 1);
+                }
+            }
+        }
+
+        final ArrayList<GeoCoding> sharedGeoCodings = new ArrayList<>();
+        for (GeoCoding geoCoding : counts.keySet()) {
+            int shared = counts.get(geoCoding);
+            if (shared > 1) {
+                sharedGeoCodings.add(geoCoding);
+            }
+        }
+
+        return sharedGeoCodings;
+    }
+
+    Map<String, Object> collectProductAttributes() {
+        final Product product = getSourceProduct();
         final Map<String, Object> productAttributes = new HashMap<>();
-        productAttributes.put(PRODUCT_NAME, product.getName());
-        productAttributes.put(PRODUCT_TYPE, product.getProductType());
-        productAttributes.put(PRODUCT_DESC, product.getDescription());
-        productAttributes.put(TIME_START, ISO8601ConverterWithMlliseconds.format(product.getStartTime())); // "time_coverage_start"
-        productAttributes.put(TIME_END, ISO8601ConverterWithMlliseconds.format(product.getEndTime())); // "time_coverage_end"
+        productAttributes.put(ATT_NAME_PRODUCT_NAME, product.getName());
+        productAttributes.put(ATT_NAME_PRODUCT_TYPE, product.getProductType());
+        productAttributes.put(ATT_NAME_PRODUCT_DESC, product.getDescription());
+        addTimeAttribute(productAttributes, TIME_START, product.getStartTime()); // "time_coverage_start"
+        addTimeAttribute(productAttributes, TIME_END, product.getEndTime()); // "time_coverage_end"
 
         final boolean prettyPrinting = false;
         final String metadataNotPrettyPrint = ZarrUtils.toJson(product.getMetadataRoot().getElements(), prettyPrinting);
-        productAttributes.put(PRODUCT_METADATA, metadataNotPrettyPrint);
+        productAttributes.put(ATT_NAME_PRODUCT_METADATA, metadataNotPrettyPrint);
 
         if (product.getAutoGrouping() != null) {
             productAttributes.put(DATASET_AUTO_GROUPING, product.getAutoGrouping().toString());
@@ -117,7 +152,52 @@ public class ZarrProductWriter extends AbstractProductWriter {
         if (isNotNullAndNotEmpty(product.getQuicklookBandName())) {
             productAttributes.put(QUICKLOOK_BAND_NAME, product.getQuicklookBandName());
         }
+        final GeoCoding gc = product.getSceneGeoCoding();
+        if (gc != null) {
+            productAttributes.put(ATT_NAME_GEOCODING, getGeoCodingAttributes(gc));
+        }
         return productAttributes;
+    }
+
+    private void addTimeAttribute(Map<String, Object> productAttributes, String attName, ProductData.UTC utc) {
+        if (utc != null) {
+            productAttributes.put(attName, ISO8601ConverterWithMlliseconds.format(utc));
+        }
+    }
+
+    HashMap<String, Object> getGeoCodingAttributes(GeoCoding gc) {
+        final HashMap<String, Object> map = new HashMap<>();
+        map.put("type", gc.getClass().getSimpleName());
+        if (sharedGeoCodings.contains(gc) ){
+            map.put(ATT_NAME_GEOCODING_SHARED, true);
+        }
+        if (gc instanceof TiePointGeoCoding) {
+            final TiePointGeoCoding tpgc = (TiePointGeoCoding) gc;
+            final String latGridName = tpgc.getLatGrid().getName();
+            map.put("latGridName", latGridName);
+            final String lonGridName = tpgc.getLonGrid().getName();
+            map.put("lonGridName", lonGridName);
+            final CoordinateReferenceSystem geoCRS = tpgc.getGeoCRS();
+            if (geoCRS != null) {
+                map.put("geoCRS_WKT", geoCRS.toWKT());
+            }
+        } else if (gc instanceof CrsGeoCoding) {
+            final CrsGeoCoding crsGeoCoding = (CrsGeoCoding) gc;
+            final String wkt = crsGeoCoding.getMapCRS().toString().replaceAll("\n *", "").replaceAll("\r *","");
+            map.put(DimapProductConstants.TAG_WKT, wkt);
+            final double[] matrix = new double[6];
+            final MathTransform transform = crsGeoCoding.getImageToMapTransform();
+            if (transform instanceof AffineTransform) {
+                ((AffineTransform) transform).getMatrix(matrix);
+            }
+            map.put(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM, matrix);
+        }
+        return map;
+    }
+
+    private static String stringify(Map<String, Object> map) {
+        final boolean prettyPrinting = false;
+        return ZarrUtils.toJson(map, prettyPrinting);
     }
 
     static void collectBandAttributes(Band band, Map<String, Object> attributes) {
@@ -345,12 +425,12 @@ public class ZarrProductWriter extends AbstractProductWriter {
     private Map<String, Object> collectTiePointGridAttributes(TiePointGrid tiePointGrid) {
         final Map<String, Object> attributes = new HashMap<>();
         collectRasterAttributes(tiePointGrid, attributes);
-        attributes.put(OFFSET_X, tiePointGrid.getOffsetX());
-        attributes.put(OFFSET_Y, tiePointGrid.getOffsetY());
-        attributes.put(SUBSAMPLING_X, tiePointGrid.getSubSamplingX());
-        attributes.put(SUBSAMPLING_Y, tiePointGrid.getSubSamplingY());
+        attributes.put(ATT_NAME_OFFSET_X, tiePointGrid.getOffsetX());
+        attributes.put(ATT_NAME_OFFSET_Y, tiePointGrid.getOffsetY());
+        attributes.put(ATT_NAME_SUBSAMPLING_X, tiePointGrid.getSubSamplingX());
+        attributes.put(ATT_NAME_SUBSAMPLING_Y, tiePointGrid.getSubSamplingY());
         if (binaryWriterPlugIn != null) {
-            attributes.put(ATTRIBUTE_NAME_BINARY_FORMAT, binaryWriterPlugIn.getFormatNames()[0]);
+            attributes.put(ATT_NAME_BINARY_FORMAT, binaryWriterPlugIn.getFormatNames()[0]);
         }
         final int discontinuity = tiePointGrid.getDiscontinuity();
         if (discontinuity != TiePointGrid.DISCONT_NONE) {
@@ -425,7 +505,11 @@ public class ZarrProductWriter extends AbstractProductWriter {
         collectRasterAttributes(band, bandAttributes);
         collectBandAttributes(band, bandAttributes);
         if (binaryWriterPlugIn != null) {
-            bandAttributes.put(ATTRIBUTE_NAME_BINARY_FORMAT, binaryWriterPlugIn.getFormatNames()[0]);
+            bandAttributes.put(ATT_NAME_BINARY_FORMAT, binaryWriterPlugIn.getFormatNames()[0]);
+        }
+        final GeoCoding geoCoding = band.getGeoCoding();
+        if (geoCoding != band.getProduct().getSceneGeoCoding()) {
+            bandAttributes.put(ATT_NAME_GEOCODING, getGeoCodingAttributes(geoCoding));
         }
         return bandAttributes;
     }

@@ -1,0 +1,165 @@
+package org.esa.snap.dataio.znap.snap;
+
+import com.bc.zarr.ZarrGroup;
+import com.google.common.jimfs.Jimfs;
+import org.esa.snap.core.datamodel.*;
+import org.geotools.referencing.crs.DefaultGeographicCRS;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING_SHARED;
+import static org.hamcrest.Matchers.*;
+import static org.junit.Assert.*;
+
+public class ZarrProductWriterReaderTest_SharedGeoCodings {
+
+    private Product product;
+    private CrsGeoCoding sceneGeoCoding;
+    private CrsGeoCoding sharedGC;
+    private CrsGeoCoding single_1;
+    private CrsGeoCoding single_2;
+    private Path tempDirectory;
+
+    @Before
+    public void setUp() throws Exception {
+        tempDirectory = Files.createTempDirectory("1111_out_" + getClass().getSimpleName());
+        product = new Product("test", "type", 3, 4);
+        final Date start = new Date();
+        final Date end = new Date(start.getTime() + 4000);
+        product.setStartTime(ProductData.UTC.create(start, 123));
+        product.setEndTime(ProductData.UTC.create(end, 123));
+
+        final Band b0 = product.addBand("b0", ProductData.TYPE_INT8);
+        final Band b1 = product.addBand("b1", ProductData.TYPE_INT8);
+        final Band b2 = product.addBand("b2", ProductData.TYPE_INT8);
+        final Band b3 = product.addBand("b3", ProductData.TYPE_INT8);
+        final Band b4 = product.addBand("b4", ProductData.TYPE_INT8);
+        final Band b5 = product.addBand("b5", ProductData.TYPE_INT8);
+        final Band b6 = product.addBand("b6", ProductData.TYPE_INT8);
+        final Band b7 = product.addBand("b7", ProductData.TYPE_INT8);
+        final Band b8 = product.addBand("b8", ProductData.TYPE_INT8);
+        final Band b9 = product.addBand("b9", ProductData.TYPE_INT8);
+
+        sceneGeoCoding = new CrsGeoCoding(DefaultGeographicCRS.WGS84, 3, 4, 14.0, 15.0, 0.2, 0.1);
+        sharedGC = new CrsGeoCoding(DefaultGeographicCRS.WGS84, 3, 4, 13.0, 15.0, 0.2, 0.1);
+        single_1 = new CrsGeoCoding(DefaultGeographicCRS.WGS84, 3, 4, 12.0, 15.0, 0.2, 0.1);
+        single_2 = new CrsGeoCoding(DefaultGeographicCRS.WGS84, 3, 4, 11.0, 15.0, 0.2, 0.1);
+        product.setSceneGeoCoding(sceneGeoCoding);
+        b4.setGeoCoding(sharedGC);
+        b5.setGeoCoding(sharedGC);
+        b6.setGeoCoding(sharedGC);
+        b7.setGeoCoding(single_1);
+        b8.setGeoCoding(single_2);
+
+        assertSame(b0.getGeoCoding(), sceneGeoCoding);
+        assertSame(b1.getGeoCoding(), sceneGeoCoding);
+        assertSame(b2.getGeoCoding(), sceneGeoCoding);
+        assertSame(b3.getGeoCoding(), sceneGeoCoding);
+        assertSame(b4.getGeoCoding(), sharedGC);
+        assertSame(b5.getGeoCoding(), sharedGC);
+        assertSame(b6.getGeoCoding(), sharedGC);
+        assertSame(b7.getGeoCoding(), single_1);
+        assertSame(b8.getGeoCoding(), single_2);
+        assertSame(b9.getGeoCoding(), sceneGeoCoding);
+    }
+
+    @After
+    public void tearDown() throws Exception, IOException {
+        if (Files.exists(tempDirectory)) {
+            final List<Path> list = Files.walk(tempDirectory).sorted(Comparator.reverseOrder()).collect(Collectors.toList());
+            for (Path path : list) {
+                Files.delete(path);
+            }
+        }
+    }
+
+    @Test
+    public void collectSharedGeoCodings() {
+        final List<GeoCoding> geoCodings = ZarrProductWriter.collectSharedGeoCodings(product);
+
+        assertThat(geoCodings, is(notNullValue()));
+        assertThat(geoCodings.size(), is(2));
+        assertThat(geoCodings.contains(sceneGeoCoding), is(true));
+        assertThat(geoCodings.contains(sharedGC), is(true));
+        assertThat(geoCodings.contains(single_1), is(false));
+        assertThat(geoCodings.contains(single_2), is(false));
+    }
+
+    @Test
+    public void testThatSharedGeocodingsAreMarkedInZarrAttributes() throws IOException {
+        final ZarrProductWriter zarrProductWriter = new ZarrProductWriter(new ZarrProductWriterPlugIn());
+        final Path rootPath = tempDirectory;
+        zarrProductWriter.writeProductNodes(product, rootPath);
+
+        //verification
+        // Verify that product root group attributes contains a shared geocoding
+        final ZarrGroup group = ZarrGroup.open(rootPath);
+        final Map geocoding = (Map) group.getAttributes().get(ATT_NAME_GEOCODING);
+        assertThat(geocoding, is(notNullValue()));
+        assertThat(geocoding.get(ATT_NAME_GEOCODING_SHARED), is(true));
+
+        // Verify that if a band has its own geocoding shared with other bands
+        // then the geo coding attributes must contain the Key "shared" and the value true.
+        final Band[] bands = product.getBands();
+        for (Band band : bands) {
+            final Map<String, Object> attr = group.openArray(band.getName()).getAttributes();
+            final boolean bandOwnsGC = band.getGeoCoding() != sceneGeoCoding;
+            if (bandOwnsGC) {
+                assertThat(attr.containsKey(ATT_NAME_GEOCODING), is(true));
+                final Map gcAttr = (Map) attr.get(ATT_NAME_GEOCODING);
+                if (band.getGeoCoding() == sharedGC) {
+                    assertThat(gcAttr.get(ATT_NAME_GEOCODING_SHARED), is(true));
+                } else {
+                    assertThat(gcAttr.containsKey(ATT_NAME_GEOCODING_SHARED), is (false));
+                }
+            }
+        }
+    }
+
+    @Test
+    public void writeAndRead() throws IOException {
+        final ZarrProductWriter writer = new ZarrProductWriter(new ZarrProductWriterPlugIn());
+        final Path rootPath = tempDirectory;
+        writer.writeProductNodes(product, rootPath);
+
+        final ZarrProductReader reader = new ZarrProductReader(new ZarrProductReaderPlugIn());
+        final Product product = reader.readProductNodes(rootPath, null);
+
+        assertNotNull(product);
+        final GeoCoding sceneGeoCoding = product.getSceneGeoCoding();
+        final GeoCoding sharedGeoCoding = product.getBand("b4").getGeoCoding();
+        assertNotNull(sceneGeoCoding);
+        assertNotNull(sharedGeoCoding);
+        assertNotEquals(sharedGeoCoding, sceneGeoCoding);
+
+        assertSame(sceneGeoCoding, product.getBand("b0").getGeoCoding());
+        assertSame(sceneGeoCoding, product.getBand("b1").getGeoCoding());
+        assertSame(sceneGeoCoding, product.getBand("b2").getGeoCoding());
+        assertSame(sceneGeoCoding, product.getBand("b3").getGeoCoding());
+        assertSame(sceneGeoCoding, product.getBand("b9").getGeoCoding());
+
+        assertSame(sharedGeoCoding, product.getBand("b5").getGeoCoding());
+        assertSame(sharedGeoCoding, product.getBand("b6").getGeoCoding());
+
+        assertNotEquals(sceneGeoCoding, product.getBand("b7").getGeoCoding());
+        assertNotEquals(sharedGeoCoding, product.getBand("b7").getGeoCoding());
+        assertNotEquals(sceneGeoCoding, product.getBand("b8").getGeoCoding());
+        assertNotEquals(sharedGeoCoding, product.getBand("b8").getGeoCoding());
+
+        assertNotEquals(product.getBand("b7").getGeoCoding(), product.getBand("b8").getGeoCoding());
+    }
+}
