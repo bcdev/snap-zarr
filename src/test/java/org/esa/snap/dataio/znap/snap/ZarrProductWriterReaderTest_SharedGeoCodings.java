@@ -1,23 +1,16 @@
 package org.esa.snap.dataio.znap.snap;
 
 import com.bc.zarr.ZarrGroup;
-import com.google.common.jimfs.Jimfs;
 import org.esa.snap.core.datamodel.*;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.FileAttribute;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Consumer;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING;
@@ -32,11 +25,10 @@ public class ZarrProductWriterReaderTest_SharedGeoCodings {
     private CrsGeoCoding sharedGC;
     private CrsGeoCoding single_1;
     private CrsGeoCoding single_2;
-    private Path tempDirectory;
+    private List<Path> tempDirectories = new ArrayList<>();
 
     @Before
     public void setUp() throws Exception {
-        tempDirectory = Files.createTempDirectory("1111_out_" + getClass().getSimpleName());
         product = new Product("test", "type", 3, 4);
         final Date start = new Date();
         final Date end = new Date(start.getTime() + 4000);
@@ -78,13 +70,20 @@ public class ZarrProductWriterReaderTest_SharedGeoCodings {
     }
 
     @After
-    public void tearDown() throws Exception, IOException {
-        if (Files.exists(tempDirectory)) {
-            final List<Path> list = Files.walk(tempDirectory).sorted(Comparator.reverseOrder()).collect(Collectors.toList());
-            for (Path path : list) {
-                Files.delete(path);
+    public void tearDown() {
+        for (final Path tempDirectory : tempDirectories) {
+            try {
+                if (Files.exists(tempDirectory)) {
+                    final List<Path> list = Files.walk(tempDirectory).sorted(Comparator.reverseOrder()).collect(Collectors.toList());
+                    for (Path path : list) {
+                        Files.delete(path);
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
+        tempDirectories.clear();
     }
 
     @Test
@@ -102,7 +101,7 @@ public class ZarrProductWriterReaderTest_SharedGeoCodings {
     @Test
     public void testThatSharedGeocodingsAreMarkedInZarrAttributes() throws IOException {
         final ZarrProductWriter zarrProductWriter = new ZarrProductWriter(new ZarrProductWriterPlugIn());
-        final Path rootPath = tempDirectory;
+        final Path rootPath = createTempDirectory();
         zarrProductWriter.writeProductNodes(product, rootPath);
 
         //verification
@@ -133,7 +132,7 @@ public class ZarrProductWriterReaderTest_SharedGeoCodings {
     @Test
     public void writeAndRead() throws IOException {
         final ZarrProductWriter writer = new ZarrProductWriter(new ZarrProductWriterPlugIn());
-        final Path rootPath = tempDirectory;
+        final Path rootPath = createTempDirectory();
         writer.writeProductNodes(product, rootPath);
 
         final ZarrProductReader reader = new ZarrProductReader(new ZarrProductReaderPlugIn());
@@ -161,5 +160,41 @@ public class ZarrProductWriterReaderTest_SharedGeoCodings {
         assertNotEquals(sharedGeoCoding, product.getBand("b8").getGeoCoding());
 
         assertNotEquals(product.getBand("b7").getGeoCoding(), product.getBand("b8").getGeoCoding());
+    }
+
+    @Test
+    public void testThatTheGeneratedOutputsAreEqual() throws IOException {
+        final ZarrProductWriter writer = new ZarrProductWriter(new ZarrProductWriterPlugIn());
+        final Path rootPath = createTempDirectory();
+        writer.writeProductNodes(product, rootPath);
+
+        final ZarrProductReader reader = new ZarrProductReader(new ZarrProductReaderPlugIn());
+        final Product product = reader.readProductNodes(rootPath, null);
+
+        final ZarrProductWriter secondWriter = new ZarrProductWriter(new ZarrProductWriterPlugIn());
+        final Path secondRoot = createTempDirectory();
+        secondWriter.writeProductNodes(product, secondRoot);
+
+        final List<Path> firstList = Files.walk(rootPath).filter(path -> path.getFileName().toString().equals(".zattrs")).collect(Collectors.toList());
+        final List<Path> secondList = Files.walk(secondRoot).filter(path -> path.getFileName().toString().equals(".zattrs")).collect(Collectors.toList());
+        assertEquals(firstList.size(), secondList.size());
+        for (int i = 0; i < firstList.size(); i++) {
+            Path firstPath = firstList.get(i);
+            Path secondPath = secondList.get(i);
+            final List<String> firstLines = Files.readAllLines(firstPath);
+            final List<String> secondLines = Files.readAllLines(secondPath);
+            assertEquals(firstLines.size(), secondLines.size());
+            for (int j = 0; j < firstLines.size(); j++) {
+                String firstLine = firstLines.get(j);
+                String secondLine = secondLines.get(j);
+                assertEquals(firstLine, secondLine);
+            }
+        }
+    }
+
+    private Path createTempDirectory() throws IOException {
+        final Path tempDirectory = Files.createTempDirectory("1111_out_" + getClass().getSimpleName());
+        tempDirectories.add(tempDirectory);
+        return tempDirectory;
     }
 }
