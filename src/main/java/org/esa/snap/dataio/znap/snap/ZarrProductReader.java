@@ -139,10 +139,20 @@ public class ZarrProductReader extends AbstractProductReader {
                 product.addTiePointGrid(tiePointGrid);
                 nodeAttributes.put(tiePointGrid, attributes);
             } else {
-                final Band band = new Band(rasterName, snapDataType.getValue(), width, height);
+                final Band band;
+                final boolean virtualBand = attributes != null && attributes.containsKey(VIRTUAL_BAND_EXPRESSION);
+                if (virtualBand) {
+                    final String expr = (String) attributes.get(VIRTUAL_BAND_EXPRESSION);
+                    band = new VirtualBand(rasterName, snapDataType.getValue(), width, height, expr);
+                } else {
+                    band = new Band(rasterName, snapDataType.getValue(), width, height);
+                }
                 product.addBand(band);
                 nodeAttributes.put(band, attributes);
                 apply(attributes, band);
+                if (virtualBand) {
+                    continue;
+                }
                 if (attributes != null && attributes.containsKey(ATT_NAME_BINARY_FORMAT)) {
                     initBinaryReaderPlugin(attributes);
                     final Path srcPath = rootPath.resolve(rasterName).resolve(rasterName + binaryFileExtension);
@@ -246,8 +256,7 @@ public class ZarrProductReader extends AbstractProductReader {
                     ma[i] = (double) matrix.get(i);
                 }
                 final AffineTransform i2m = new AffineTransform(ma);
-                Rectangle imageBounds = new Rectangle(width,
-                        height);
+                Rectangle imageBounds = new Rectangle(width, height);
                 return new CrsGeoCoding(crs, imageBounds, i2m);
             } catch (FactoryException | TransformException e) {
                 Debug.trace(e);
@@ -336,9 +345,9 @@ public class ZarrProductReader extends AbstractProductReader {
                 product.getIndexCodingGroup().add(indexCoding);
             } else {
                 LOG.warning("Raster attributes for '" + rasterName
-                        + "' contains the attribute '" + FLAG_MEANINGS
-                        + "' but neither an attribute '" + FLAG_MASKS
-                        + "' nor an attribute '" + FLAG_VALUES + "'."
+                                    + "' contains the attribute '" + FLAG_MEANINGS
+                                    + "' but neither an attribute '" + FLAG_MASKS
+                                    + "' nor an attribute '" + FLAG_VALUES + "'."
                 );
                 return;
             }

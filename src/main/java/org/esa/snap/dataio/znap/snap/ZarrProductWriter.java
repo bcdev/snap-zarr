@@ -28,8 +28,6 @@ import static org.esa.snap.core.util.StringUtils.isNotNullAndNotEmpty;
 import static org.esa.snap.core.util.SystemUtils.LOG;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
-import static ucar.nc2.constants.CDM.TIME_END;
-import static ucar.nc2.constants.CDM.TIME_START;
 
 public class ZarrProductWriter extends AbstractProductWriter {
 
@@ -99,8 +97,19 @@ public class ZarrProductWriter extends AbstractProductWriter {
             writeTiePointGrid(tiePointGrid);
         }
         for (Band band : product.getBands()) {
-            initializeZarrBandWriter(band);
+            initializeZarrArrayForBand(band);
+            if (shouldWrite(band)) {
+                initializeZarrBandWriter(band);
+            }
         }
+    }
+
+    @Override
+    public boolean shouldWrite(ProductNode node) {
+        if (node instanceof VirtualBand) {
+            return false;
+        }
+        return super.shouldWrite(node);
     }
 
     static List<GeoCoding> collectSharedGeoCodings(Product product) {
@@ -159,16 +168,10 @@ public class ZarrProductWriter extends AbstractProductWriter {
         return productAttributes;
     }
 
-    private void addTimeAttribute(Map<String, Object> productAttributes, String attName, ProductData.UTC utc) {
-        if (utc != null) {
-            productAttributes.put(attName, ISO8601ConverterWithMlliseconds.format(utc));
-        }
-    }
-
     HashMap<String, Object> getGeoCodingAttributes(GeoCoding gc) {
         final HashMap<String, Object> map = new HashMap<>();
         map.put("type", gc.getClass().getSimpleName());
-        if (sharedGeoCodings.contains(gc) ){
+        if (sharedGeoCodings.contains(gc)) {
             map.put(ATT_NAME_GEOCODING_SHARED, true);
         }
         if (gc instanceof TiePointGeoCoding) {
@@ -183,21 +186,33 @@ public class ZarrProductWriter extends AbstractProductWriter {
             }
         } else if (gc instanceof CrsGeoCoding) {
             final CrsGeoCoding crsGeoCoding = (CrsGeoCoding) gc;
-            final String wkt = crsGeoCoding.getMapCRS().toString().replaceAll("\n *", "").replaceAll("\r *","");
+            final String wkt = crsGeoCoding.getMapCRS().toString().replaceAll("\n *", "").replaceAll("\r *", "");
             map.put(DimapProductConstants.TAG_WKT, wkt);
             final double[] matrix = new double[6];
-            final MathTransform transform = crsGeoCoding.getImageToMapTransform();
-            if (transform instanceof AffineTransform) {
-                ((AffineTransform) transform).getMatrix(matrix);
-            }
+            ((AffineTransform) crsGeoCoding.getImageToMapTransform()).getMatrix(matrix);
             map.put(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM, matrix);
         }
         return map;
     }
 
-    private static String stringify(Map<String, Object> map) {
-        final boolean prettyPrinting = false;
-        return ZarrUtils.toJson(map, prettyPrinting);
+    static void collectRasterAttributes(RasterDataNode rdNode, Map<String, Object> attributes) {
+
+        final int nodeDataType = rdNode.getDataType();
+
+        if (rdNode.getDescription() != null) {
+            attributes.put(LONG_NAME, rdNode.getDescription());
+        }
+        if (rdNode.getUnit() != null) {
+            attributes.put(UNITS, tryFindUnitString(rdNode.getUnit()));
+        }
+        if (ProductData.isUIntType(nodeDataType)) {
+            attributes.put(UNSIGNED, String.valueOf(true));
+        }
+        collectNoDataValue(rdNode, attributes);
+
+        if (isNotNullAndNotEmpty(rdNode.getValidPixelExpression())) {
+            attributes.put(VALID_PIXEL_EXPRESSION, rdNode.getValidPixelExpression());
+        }
     }
 
     static void collectBandAttributes(Band band, Map<String, Object> attributes) {
@@ -218,6 +233,17 @@ public class ZarrProductWriter extends AbstractProductWriter {
         }
 
         collectSampleCodingAttributes(band, attributes);
+    }
+
+    private void addTimeAttribute(Map<String, Object> productAttributes, String attName, ProductData.UTC utc) {
+        if (utc != null) {
+            productAttributes.put(attName, ISO8601ConverterWithMlliseconds.format(utc));
+        }
+    }
+
+    private static String stringify(Map<String, Object> map) {
+        final boolean prettyPrinting = false;
+        return ZarrUtils.toJson(map, prettyPrinting);
     }
 
     private ProductData ensureNotLogarithmicData(Band sourceBand, ProductData data) {
@@ -447,8 +473,8 @@ public class ZarrProductWriter extends AbstractProductWriter {
         }
     }
 
-    private void initializeZarrBandWriter(Band band) throws IOException {
-        final int[] shape = {band.getRasterHeight(), band.getRasterWidth()}; // common data model manner { y, x }
+    private void initializeZarrArrayForBand(Band band) throws IOException {
+        final int[] shape = getShape(band); // common data model manner { y, x }
         final String name = band.getName();
         final ArrayParams arrayParams = new ArrayParams()
                 .dataType(getZarrDataType(band))
@@ -464,7 +490,13 @@ public class ZarrProductWriter extends AbstractProductWriter {
         } else {
             arrayParams.chunked(false);
         }
-        final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParams, collectBandAttributes(band));
+        zarrGroup.createArray(name, arrayParams, collectBandAttributes(band));
+    }
+
+    private void initializeZarrBandWriter(Band band) throws IOException {
+        int[] shape = getShape(band);
+        String name = band.getName();
+        ZarrArray zarrArray = zarrGroup.openArray(name);
         final BinaryWriter binaryWriter;
         if (binaryWriterPlugIn == null) {
             binaryWriter = new StandardZarrChunksWriter(zarrArray);
@@ -483,6 +515,10 @@ public class ZarrProductWriter extends AbstractProductWriter {
             binaryWriter = new UserDefinedBinaryWriter(binaryBand);
         }
         zarrWriters.put(band, binaryWriter);
+    }
+
+    private int[] getShape(Band band) {
+        return new int[]{band.getRasterHeight(), band.getRasterWidth()};
     }
 
     private void switchToIntermediateMode(ProductWriter writer) {
@@ -504,6 +540,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
         final Map<String, Object> bandAttributes = new HashMap<>();
         collectRasterAttributes(band, bandAttributes);
         collectBandAttributes(band, bandAttributes);
+        collectVirtualBandAttributes(band, bandAttributes);
         if (binaryWriterPlugIn != null) {
             bandAttributes.put(ATT_NAME_BINARY_FORMAT, binaryWriterPlugIn.getFormatNames()[0]);
         }
@@ -514,33 +551,20 @@ public class ZarrProductWriter extends AbstractProductWriter {
         return bandAttributes;
     }
 
+    private static void collectVirtualBandAttributes(Band band, Map<String, Object> bandAttributes) {
+        if (band instanceof VirtualBand) {
+            final VirtualBand virtualBand = (VirtualBand) band;
+            bandAttributes.put(VIRTUAL_BAND_EXPRESSION, virtualBand.getExpression());
+        }
+    }
+
     private ProductData readTiePointGridData(TiePointGrid tiePointGrid) throws IOException {
         final int gridWidth = tiePointGrid.getGridWidth();
         final int gridHeight = tiePointGrid.getGridHeight();
         ProductData productData = tiePointGrid.createCompatibleRasterData(gridWidth, gridHeight);
         getSourceProduct().getProductReader().readTiePointGridRasterData(tiePointGrid, 0, 0, gridWidth, gridHeight, productData,
-                ProgressMonitor.NULL);
+                                                                         ProgressMonitor.NULL);
         return productData;
-    }
-
-    static void collectRasterAttributes(RasterDataNode rdNode, Map<String, Object> attributes) {
-
-        final int nodeDataType = rdNode.getDataType();
-
-        if (rdNode.getDescription() != null) {
-            attributes.put(LONG_NAME, rdNode.getDescription());
-        }
-        if (rdNode.getUnit() != null) {
-            attributes.put(UNITS, tryFindUnitString(rdNode.getUnit()));
-        }
-        if (ProductData.isUIntType(nodeDataType)) {
-            attributes.put(UNSIGNED, String.valueOf(true));
-        }
-        collectNoDataValue(rdNode, attributes);
-
-        if (isNotNullAndNotEmpty(rdNode.getValidPixelExpression())) {
-            attributes.put(VALID_PIXEL_EXPRESSION, rdNode.getValidPixelExpression());
-        }
     }
 
     private static void collectNoDataValue(RasterDataNode rdNode, Map<String, Object> attributes) {
@@ -580,38 +604,6 @@ public class ZarrProductWriter extends AbstractProductWriter {
             attributes.put(NO_DATA_VALUE_USED, rdNode.isNoDataValueUsed());
         }
     }
-
-    // TODO: 21.07.2019 SE implement geo coding
-    // implement geocoding part for product
-    // and for Band too
-
-    //    private void encodeGeoCoding(NFileWriteable ncFile, Band band, Product product, NVariable variable) throws IOException {
-//        final GeoCoding geoCoding = band.getGeoCoding();
-//        if (!geoCoding.equals(product.getSceneGeoCoding())) {
-//            if (geoCoding instanceof TiePointGeoCoding) {
-//                final TiePointGeoCoding tpGC = (TiePointGeoCoding) geoCoding;
-//                final String[] names = new String[2];
-//                names[LON_INDEX] = tpGC.getLonGrid().getName();
-//                names[LAT_INDEX] = tpGC.getLatGrid().getName();
-//                final String value = StringUtils.arrayToString(names, " ");
-//                variable.addAttribute(GEOCODING, value);
-//            } else {
-//                if (geoCoding instanceof CrsGeoCoding) {
-//                    final CoordinateReferenceSystem crs = geoCoding.getMapCRS();
-//                    final double[] matrix = new double[6];
-//                    final MathTransform transform = geoCoding.getImageToMapTransform();
-//                    if (transform instanceof AffineTransform) {
-//                        ((AffineTransform) transform).getMatrix(matrix);
-//                    }
-//                    final String crsName = "crs_" + band.getName();
-//                    final NVariable crsVariable = ncFile.addScalarVariable(crsName, DataType.INT);
-//                    crsVariable.addAttribute("wkt", crs.toWKT());
-//                    crsVariable.addAttribute("i2m", StringUtils.arrayToCsv(matrix));
-//                    variable.addAttribute(GEOCODING, crsName);
-//                }
-//            }
-//        }
-//    }
 
     private interface BinaryWriter {
         void write(ProductData data, int[] dataShape, int[] offset) throws IOException, InvalidRangeException;

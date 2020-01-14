@@ -45,6 +45,7 @@ final class ZnapConstantsAndUtils {
     public static final String QUICKLOOK_BAND_NAME = "quicklook_band_name";
     public static final String SOLAR_FLUX = "solar_flux";
     public static final String SPECTRAL_BAND_INDEX = "spectral_band_index";
+    public static final String VIRTUAL_BAND_EXPRESSION = "virtual_band_expression";
 
     public static final String NO_DATA_VALUE_USED = "no_data_value_used";
 
