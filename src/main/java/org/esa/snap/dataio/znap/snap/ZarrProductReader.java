@@ -80,7 +80,9 @@ public class ZarrProductReader extends AbstractProductReader {
         final ProductData.UTC sensingStop = getTime(productAttributes, TIME_END, rootPath); // "time_coverage_end"
         final String product_metadata = (String) productAttributes.get(ATT_NAME_PRODUCT_METADATA);
         final ArrayList<MetadataElement> metadataElements = toMetadataElements(product_metadata);
-        final Product product = new Product(productName, productType, this);
+        final int sceneRasterWidth = ((Double) productAttributes.get(ATT_NAME_PRODUCT_SCENE_WIDTH)).intValue();
+        final int sceneRasterHeight = ((Double) productAttributes.get(ATT_NAME_PRODUCT_SCENE_HEIGHT)).intValue();
+        final Product product = new Product(productName, productType, sceneRasterWidth, sceneRasterHeight, this);
         product.setDescription(productDesc);
         product.setStartTime(sensingStart);
         product.setEndTime(sensingStop);
@@ -169,7 +171,6 @@ public class ZarrProductReader extends AbstractProductReader {
         }
         product.setFileLocation(rootPath.toFile());
         product.setProductReader(this);
-        product.getSceneRasterSize();
         product.setModified(false);
         addGeocodings(productAttributes, product);
         return product;

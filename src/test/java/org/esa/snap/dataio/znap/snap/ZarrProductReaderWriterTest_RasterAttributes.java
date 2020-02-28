@@ -2,13 +2,9 @@ package org.esa.snap.dataio.znap.snap;
 
 import org.esa.snap.core.datamodel.Band;
 import org.esa.snap.core.datamodel.ProductData;
-import org.esa.snap.core.util.ArrayUtils;
-import org.esa.snap.core.util.StringUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 
 import static org.hamcrest.Matchers.*;

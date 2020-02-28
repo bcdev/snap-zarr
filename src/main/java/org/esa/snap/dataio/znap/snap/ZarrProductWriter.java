@@ -8,9 +8,12 @@ import org.esa.snap.core.dataio.ProductIO;
 import org.esa.snap.core.dataio.ProductWriter;
 import org.esa.snap.core.dataio.ProductWriterPlugIn;
 import org.esa.snap.core.dataio.dimap.DimapProductConstants;
+import org.esa.snap.core.dataio.geocoding.ComponentGeoCoding;
+import org.esa.snap.core.dataio.geocoding.GeoChecks;
+import org.esa.snap.core.dataio.geocoding.GeoRaster;
 import org.esa.snap.core.datamodel.*;
+import org.jdom.Element;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
-import org.opengis.referencing.operation.MathTransform;
 import ucar.ma2.InvalidRangeException;
 
 import java.awt.geom.AffineTransform;
@@ -24,6 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.*;
 import static org.esa.snap.core.util.StringUtils.isNotNullAndNotEmpty;
 import static org.esa.snap.core.util.SystemUtils.LOG;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
@@ -148,6 +152,8 @@ public class ZarrProductWriter extends AbstractProductWriter {
         productAttributes.put(ATT_NAME_PRODUCT_NAME, product.getName());
         productAttributes.put(ATT_NAME_PRODUCT_TYPE, product.getProductType());
         productAttributes.put(ATT_NAME_PRODUCT_DESC, product.getDescription());
+        productAttributes.put(ATT_NAME_PRODUCT_SCENE_WIDTH, product.getSceneRasterWidth());
+        productAttributes.put(ATT_NAME_PRODUCT_SCENE_HEIGHT, product.getSceneRasterHeight());
         addTimeAttribute(productAttributes, TIME_START, product.getStartTime()); // "time_coverage_start"
         addTimeAttribute(productAttributes, TIME_END, product.getEndTime()); // "time_coverage_end"
 
@@ -170,11 +176,29 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
     HashMap<String, Object> getGeoCodingAttributes(GeoCoding gc) {
         final HashMap<String, Object> map = new HashMap<>();
-        map.put("type", gc.getClass().getSimpleName());
+        map.put(ATT_NAME_GEOCODING_TYPE, gc.getClass().getSimpleName());
         if (sharedGeoCodings.contains(gc)) {
             map.put(ATT_NAME_GEOCODING_SHARED, true);
         }
-        if (gc instanceof TiePointGeoCoding) {
+        if (gc instanceof ComponentGeoCoding) {
+
+            final ComponentGeoCoding componentGC = (ComponentGeoCoding) gc;
+
+            map.put(TAG_FORWARD_CODING_KEY, componentGC.getForwardCoding().getKey());
+            map.put(TAG_INVERSE_CODING_KEY, componentGC.getInverseCoding().getKey());
+            map.put(TAG_GEO_CHECKS, componentGC.getGeoChecks().name());
+            map.put(TAG_GEO_CRS, componentGC.getGeoCRS().toWKT().replace("\n", "").replace("\r", ""));
+
+            final GeoRaster geoRaster = componentGC.getGeoRaster();
+
+            map.put(TAG_LON_VARIABLE_NAME, geoRaster.getLonVariableName());
+            map.put(TAG_LAT_VARIABLE_NAME, geoRaster.getLatVariableName());
+            map.put(TAG_RASTER_RESOLUTION_KM, String.valueOf(geoRaster.getRasterResolutionInKm()));
+            map.put(TAG_OFFSET_X, String.valueOf(geoRaster.getOffsetX()));
+            map.put(TAG_OFFSET_Y, String.valueOf(geoRaster.getOffsetY()));
+            map.put(TAG_SUBSAMPLING_X, String.valueOf(geoRaster.getSubsamplingX()));
+            map.put(TAG_SUBSAMPLING_Y, String.valueOf(geoRaster.getSubsamplingY()));
+        } else if (gc instanceof TiePointGeoCoding) {
             final TiePointGeoCoding tpgc = (TiePointGeoCoding) gc;
             final String latGridName = tpgc.getLatGrid().getName();
             map.put("latGridName", latGridName);
