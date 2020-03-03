@@ -73,7 +73,7 @@ public class ZarrProductWriterReaderTest_persist_TiePointGeoCoding {
     }
 
     @Test
-    public void collectSharedGeoCodings() throws IOException {
+    public void writeAndRead() throws IOException {
         final Path tempDirectory = createTempDirectory();
         productWriter.writeProductNodes(product, tempDirectory);
         final Product readIn = productReader.readProductNodes(tempDirectory, null);
@@ -103,6 +103,13 @@ public class ZarrProductWriterReaderTest_persist_TiePointGeoCoding {
         assertEquals(srcGC.getLatGrid().getName(), readGC.getLatGrid().getName());
         assertEquals(srcGC.isCrossingMeridianAt180(), readGC.isCrossingMeridianAt180());
         assertEquals(srcGC.getNumApproximations(), readGC.getNumApproximations());
+        final List<RasterDataNode> rasterDataNodes = readIn.getRasterDataNodes();
+        for (int i = 0, rasterDataNodesSize = rasterDataNodes.size(); i < rasterDataNodesSize; i++) {
+            RasterDataNode rdn = rasterDataNodes.get(i);
+            final String name = rdn.getName();
+            final String message = "RasterDataNode name: " + name + " at index " + i;
+            assertSame(message, readGC, rdn.getGeoCoding());
+        }
     }
 
     private Path createTempDirectory() throws IOException {

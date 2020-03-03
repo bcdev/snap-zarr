@@ -193,11 +193,11 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
             map.put(TAG_LON_VARIABLE_NAME, geoRaster.getLonVariableName());
             map.put(TAG_LAT_VARIABLE_NAME, geoRaster.getLatVariableName());
-            map.put(TAG_RASTER_RESOLUTION_KM, String.valueOf(geoRaster.getRasterResolutionInKm()));
-            map.put(TAG_OFFSET_X, String.valueOf(geoRaster.getOffsetX()));
-            map.put(TAG_OFFSET_Y, String.valueOf(geoRaster.getOffsetY()));
-            map.put(TAG_SUBSAMPLING_X, String.valueOf(geoRaster.getSubsamplingX()));
-            map.put(TAG_SUBSAMPLING_Y, String.valueOf(geoRaster.getSubsamplingY()));
+            map.put(TAG_RASTER_RESOLUTION_KM, geoRaster.getRasterResolutionInKm());
+            map.put(TAG_OFFSET_X, geoRaster.getOffsetX());
+            map.put(TAG_OFFSET_Y, geoRaster.getOffsetY());
+            map.put(TAG_SUBSAMPLING_X, geoRaster.getSubsamplingX());
+            map.put(TAG_SUBSAMPLING_Y, geoRaster.getSubsamplingY());
         } else if (gc instanceof TiePointGeoCoding) {
             final TiePointGeoCoding tpgc = (TiePointGeoCoding) gc;
             final String latGridName = tpgc.getLatGrid().getName();

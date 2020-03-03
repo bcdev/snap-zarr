@@ -12,6 +12,7 @@ import org.esa.snap.core.dataio.ProductIO;
 import org.esa.snap.core.dataio.ProductReader;
 import org.esa.snap.core.dataio.ProductReaderPlugIn;
 import org.esa.snap.core.dataio.dimap.DimapProductConstants;
+import org.esa.snap.core.dataio.geocoding.*;
 import org.esa.snap.core.datamodel.*;
 import org.esa.snap.core.image.ResolutionLevel;
 import org.esa.snap.core.util.Debug;
@@ -25,12 +26,17 @@ import ucar.ma2.InvalidRangeException;
 import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.io.StringReader;
+import java.io.StringWriter;
 import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.*;
 import java.util.List;
+import java.util.stream.IntStream;
 
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.*;
+import static org.esa.snap.core.util.Guardian.*;
 import static org.esa.snap.core.util.SystemUtils.LOG;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
@@ -212,12 +218,102 @@ public class ZarrProductReader extends AbstractProductReader {
     }
 
     GeoCoding createGeoCoding(ProductNode node, Map gcAttribs) throws IOException {
+        final Product product = node.getProduct();
         final String type = (String) gcAttribs.get("type");
         LOG.info("------------------------------------------------------------------------");
-        if (TiePointGeoCoding.class.getSimpleName().equals(type)) {
+        if (ComponentGeoCoding.class.getSimpleName().equals(type)) {
+            LOG.info("create " + ComponentGeoCoding.class.getSimpleName() + " for " + node.getName());
+            try {
+                final String forwardKey = getNotEmptyString(gcAttribs, TAG_FORWARD_CODING_KEY);
+                final ForwardCoding forwardCoding = ComponentFactory.getForward(forwardKey);
+
+                final String inverseKey = getNotEmptyString(gcAttribs, TAG_INVERSE_CODING_KEY);
+                final InverseCoding inverseCoding = ComponentFactory.getInverse(inverseKey);
+
+                final String geoCheckName = getNotEmptyString(gcAttribs, TAG_GEO_CHECKS);
+                final GeoChecks geoChecks = GeoChecks.valueOf(geoCheckName);
+
+                final String geoCrsWKT = getNotEmptyString(gcAttribs, TAG_GEO_CRS);
+                final CoordinateReferenceSystem geoCRS;
+                try {
+                    geoCRS = CRS.parseWKT(geoCrsWKT);
+                } catch (FactoryException e) {
+                    throw new IllegalArgumentException("Unable to parse WKT for geoCRS", e);
+                }
+
+                final String lonVarName = getNotEmptyString(gcAttribs, TAG_LON_VARIABLE_NAME);
+                final RasterDataNode lonRaster = product.getRasterDataNode(lonVarName);
+                if (lonRaster == null) {
+                    throw new IllegalArgumentException("Longitude raster '" + lonVarName + "' expected but was null.");
+                }
+
+                final String latVarName = getNotEmptyString(gcAttribs, TAG_LAT_VARIABLE_NAME);
+                final RasterDataNode latRaster = product.getRasterDataNode(latVarName);
+                if (latRaster == null) {
+                    throw new IllegalArgumentException("Latitude raster '" + latVarName + "' expected but was null.");
+                }
+
+                final double resolution = (Double) getNotNull(gcAttribs, TAG_RASTER_RESOLUTION_KM);
+                final double offsetX = (Double) getNotNull(gcAttribs, TAG_OFFSET_X);
+                final double offsetY = (Double) getNotNull(gcAttribs, TAG_OFFSET_Y);
+                final double subsamplingX = (Double) getNotNull(gcAttribs, TAG_SUBSAMPLING_X);
+                final double subsamplingY = (Double) getNotNull(gcAttribs, TAG_SUBSAMPLING_Y);
+
+                final GeoRaster geoRaster;
+                if (lonRaster instanceof TiePointGrid) {
+                    final int sceneWidth = product.getSceneRasterWidth();
+                    final int sceneHeight = product.getSceneRasterHeight();
+                    final TiePointGrid lonTPG = (TiePointGrid) lonRaster;
+                    final TiePointGrid latTPG = (TiePointGrid) latRaster;
+
+                    final int gridWidth = lonTPG.getGridWidth();
+                    final int gridHeight = lonTPG.getGridHeight();
+
+                    final float[] lons = (float[]) lonTPG.getGridData().getElems();
+                    final double[] longitudes = IntStream.range(0, lons.length).mapToDouble(i -> lons[i]).toArray();
+
+                    final float[] lats = (float[]) latTPG.getGridData().getElems();
+                    final double[] latitudes = IntStream.range(0, lats.length).mapToDouble(i -> lats[i]).toArray();
+
+                    String text;
+
+                    text = "Longitude tie point grid offset X must be " + offsetX + " but was " + lonTPG.getOffsetX();
+                    assertEquals(text, lonTPG.getOffsetX(), offsetX);
+
+                    text = "Longitude tie point grid offset Y must be " + offsetY + " but was " + lonTPG.getOffsetY();
+                    assertEquals(text, lonTPG.getOffsetY(), offsetY);
+
+                    text = "Longitude tie point grid subsampling X must be " + subsamplingX + " but was " + lonTPG.getSubSamplingX();
+                    assertEquals(text, lonTPG.getSubSamplingX(), subsamplingX);
+
+                    text = "Longitude tie point grid subsampling Y must be " + subsamplingY + " but was " + lonTPG.getSubSamplingY();
+                    assertEquals(text, lonTPG.getSubSamplingY(), subsamplingY);
+
+                    geoRaster = new GeoRaster(longitudes, latitudes, lonVarName, latVarName, gridWidth, gridHeight,
+                                              sceneWidth, sceneHeight, resolution,
+                                              offsetX, offsetY, subsamplingX, subsamplingY);
+                } else {
+                    final int rasterWidth = lonRaster.getRasterWidth();
+                    final int rasterHeight = lonRaster.getRasterHeight();
+                    final int size = rasterWidth * rasterHeight;
+                    final double[] longitudes = lonRaster.getSourceImage().getImage(0).getData()
+                            .getPixels(0, 0, rasterWidth, rasterHeight, new double[size]);
+                    final double[] latitudes = latRaster.getSourceImage().getImage(0).getData()
+                            .getPixels(0, 0, rasterWidth, rasterHeight, new double[size]);
+                    geoRaster = new GeoRaster(longitudes, latitudes, lonVarName, latVarName, rasterWidth, rasterHeight,
+                                              resolution);
+                }
+
+                final ComponentGeoCoding componentGeoCoding = new ComponentGeoCoding(geoRaster, forwardCoding, inverseCoding, geoChecks, geoCRS);
+                componentGeoCoding.initialize();
+                return componentGeoCoding;
+            } catch (IllegalArgumentException e) {
+                LOG.warning(createWarning(e));
+            }
+        } else if (TiePointGeoCoding.class.getSimpleName().equals(type)) {
             LOG.info("create " + TiePointGeoCoding.class.getSimpleName() + " for " + node.getName());
-            final TiePointGrid lat = node.getProduct().getTiePointGrid((String) gcAttribs.get("latGridName"));
-            final TiePointGrid lon = node.getProduct().getTiePointGrid((String) gcAttribs.get("lonGridName"));
+            final TiePointGrid lat = product.getTiePointGrid((String) gcAttribs.get("latGridName"));
+            final TiePointGrid lon = product.getTiePointGrid((String) gcAttribs.get("lonGridName"));
             final String geoCRS_wkt = (String) gcAttribs.get("geoCRS_WKT");
             if (geoCRS_wkt != null) {
                 final ReferencingObjectFactory factory = new ReferencingObjectFactory();
@@ -239,8 +335,8 @@ public class ZarrProductReader extends AbstractProductReader {
                 width = rasterDataNode.getRasterWidth();
                 height = rasterDataNode.getRasterHeight();
             } else {
-                width = node.getProduct().getSceneRasterWidth();
-                height = node.getProduct().getSceneRasterHeight();
+                width = product.getSceneRasterWidth();
+                height = product.getSceneRasterHeight();
             }
             LOG.info("width = " + width);
             LOG.info("height = " + height);
@@ -264,6 +360,33 @@ public class ZarrProductReader extends AbstractProductReader {
             }
         }
         return null;
+    }
+
+    private String createWarning(IllegalArgumentException e) {
+        final StringWriter out = new StringWriter();
+        final PrintWriter pw = new PrintWriter(out);
+        pw.print("Unable to create geo-coding    ");
+        pw.println(e.getMessage());
+        final StackTraceElement[] stackTrace = e.getStackTrace();
+        for (StackTraceElement element : stackTrace) {
+            pw.println(" ...... " + element.toString());
+        }
+        pw.flush();
+        pw.close();
+        return out.toString();
+    }
+
+    private String getNotEmptyString(Map map, String key) {
+        final Object o = getNotNull(map, key);
+        final String s = ((String) o).trim();
+        assertNotNullOrEmpty(key, s);
+        return s;
+    }
+
+    private Object getNotNull(Map map, String key) {
+        final Object o = map.get(key);
+        assertNotNull(key, o);
+        return o;
     }
 
     private void initBinaryReaderPlugin(Map<String, Object> attributes) {
