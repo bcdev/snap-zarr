@@ -9,10 +9,8 @@ import org.esa.snap.core.dataio.ProductWriter;
 import org.esa.snap.core.dataio.ProductWriterPlugIn;
 import org.esa.snap.core.dataio.dimap.DimapProductConstants;
 import org.esa.snap.core.dataio.geocoding.ComponentGeoCoding;
-import org.esa.snap.core.dataio.geocoding.GeoChecks;
 import org.esa.snap.core.dataio.geocoding.GeoRaster;
 import org.esa.snap.core.datamodel.*;
-import org.jdom.Element;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import ucar.ma2.InvalidRangeException;
 
@@ -22,10 +20,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.Callable;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.*;
 import static org.esa.snap.core.util.StringUtils.isNotNullAndNotEmpty;
@@ -35,11 +29,8 @@ import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
 
 public class ZarrProductWriter extends AbstractProductWriter {
 
-    public static final int DEFAULT_NUM_THREADS = 1;
-
     private final HashMap<Band, BinaryWriter> zarrWriters = new HashMap<>();
     private final Compressor compressor;
-    private final ThreadPoolExecutor executorService;
     private final ProductWriterPlugIn binaryWriterPlugIn;
     private ZarrGroup zarrGroup;
     private Path outputRoot;
@@ -48,8 +39,6 @@ public class ZarrProductWriter extends AbstractProductWriter {
     public ZarrProductWriter(final ZarrProductWriterPlugIn productWriterPlugIn) {
         super(productWriterPlugIn);
         compressor = CompressorFactory.create("zlib", getCompressionLevel(3));
-        final int threads = getNumWritingThreads(DEFAULT_NUM_THREADS);
-        executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(threads > 0 ? threads : DEFAULT_NUM_THREADS);
         binaryWriterPlugIn = getBinaryWriterPlugin(productWriterPlugIn);
     }
 
@@ -58,15 +47,12 @@ public class ZarrProductWriter extends AbstractProductWriter {
         final BinaryWriter binaryWriter = zarrWriters.get(sourceBand);
         final int[] to = {sourceOffsetY, sourceOffsetX}; // common data model manner { y, x }
         final int[] shape = {sourceHeight, sourceWidth};  // common data model manner { y, x }
-        Callable<Object> callable = () -> {
-            try {
-                binaryWriter.write(ensureNotLogarithmicData(sourceBand, sourceBuffer), shape, to);
-                return null;
-            } catch (InvalidRangeException e) {
-                throw new IOException("Invalid range while writing raster '" + sourceBand.getName() + "'", e);
-            }
-        };
-        executorService.submit(callable);
+        try {
+            binaryWriter.write(ensureNotLogarithmicData(sourceBand, sourceBuffer), shape, to);
+        } catch (InvalidRangeException e) {
+            throw new IOException("Invalid range while writing raster '" + sourceBand.getName() + "'", e);
+        }
+        pm.done();
     }
 
     @Override
@@ -75,11 +61,6 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
     @Override
     public void close() throws IOException {
-        try {
-            executorService.shutdown();
-            executorService.awaitTermination(Integer.MAX_VALUE, TimeUnit.SECONDS);
-        } catch (InterruptedException ignored) {
-        }
         for (BinaryWriter value : zarrWriters.values()) {
             value.dispose();
         }
@@ -265,11 +246,6 @@ public class ZarrProductWriter extends AbstractProductWriter {
         }
     }
 
-    private static String stringify(Map<String, Object> map) {
-        final boolean prettyPrinting = false;
-        return ZarrUtils.toJson(map, prettyPrinting);
-    }
-
     private ProductData ensureNotLogarithmicData(Band sourceBand, ProductData data) {
         final boolean log10Scaled = sourceBand.isLog10Scaled();
         if (!log10Scaled) {
@@ -318,11 +294,10 @@ public class ZarrProductWriter extends AbstractProductWriter {
                 alsoFlagValues = alsoFlagValues || twoElements;
             }
         }
+        attributes.put(FLAG_MEANINGS, names);
         if (indexBand) {
-            attributes.put(FLAG_MEANINGS, names);
             attributes.put(FLAG_VALUES, values);
         } else {
-            attributes.put(FLAG_MEANINGS, names);
             attributes.put(FLAG_MASKS, masks);
             if (alsoFlagValues) {
                 attributes.put(FLAG_VALUES, values);
@@ -407,14 +382,6 @@ public class ZarrProductWriter extends AbstractProductWriter {
         return compressionLevel;
     }
 
-    private int getNumWritingThreads(int defaultValue) {
-        final int maxNumWritingThreads = Integer.parseInt(System.getProperty(PROPERTY_NAME_MAX_WRITE_THREADS, "" + defaultValue));
-        if (maxNumWritingThreads != defaultValue) {
-            LOG.info("Znap format product writer will use " + maxNumWritingThreads + " threads to write data.");
-        }
-        return maxNumWritingThreads;
-    }
-
     private ProductWriterPlugIn getBinaryWriterPlugin(ZarrProductWriterPlugIn productWriterPlugIn) {
         String defaultBinaryFormatName = productWriterPlugIn.getFormatNames()[0];
         final String binaryFormatName = System.getProperty(PROPERTY_NAME_BINARY_FORMAT, defaultBinaryFormatName);
@@ -429,7 +396,6 @@ public class ZarrProductWriter extends AbstractProductWriter {
         return writerPlugIn;
     }
 
-
     private void writeTiePointGrid(TiePointGrid tiePointGrid) throws IOException {
         final int[] shape = {tiePointGrid.getGridHeight(), tiePointGrid.getGridWidth()}; // common data model manner { y, x }
         final String name = tiePointGrid.getName();
@@ -442,7 +408,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
         final ZarrArray zarrArray = zarrGroup.createArray(name, arrayParams, attributes);
 
         final ProductData gridData;
-        if (tiePointGrid.hasRasterData()) {
+        if (tiePointGrid.getGridData() != null) {
             gridData = tiePointGrid.getData();
         } else {
             gridData = readTiePointGridData(tiePointGrid);
