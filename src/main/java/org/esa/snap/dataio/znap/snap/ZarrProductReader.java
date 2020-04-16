@@ -581,8 +581,12 @@ public class ZarrProductReader extends AbstractProductReader {
     }
 
     private ProductData.UTC getTime(Map<String, Object> productAttributes, String attributeName, Path rootPath) throws IOException {
+        if (!productAttributes.containsKey(attributeName)) {
+            return null;
+        }
+        final String iso8601String = (String) productAttributes.get(attributeName);
         try {
-            return ISO8601ConverterWithMlliseconds.parse((String) productAttributes.get(attributeName));
+            return ISO8601ConverterWithMlliseconds.parse(iso8601String);
         } catch (ParseException e) {
             throw new IOException("Unparseable " + attributeName + " while reading product '" + rootPath.toString() + "'", e);
         }
