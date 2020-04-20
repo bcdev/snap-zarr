@@ -32,7 +32,7 @@ public class ZarrProductReaderTest_applySpectralAttributes {
         ZarrProductWriter.collectBandAttributes(sourceBand, attributes);
         assertThat(attributes.size(), is(2));
         //execution
-        ZarrProductReader.apply(attributes, targetBand);
+        ZarrProductReader.applyBandAttributes(attributes, targetBand);
         //verification
         assertThat(targetBand.getSpectralBandwidth(), is(123.4f));
     }
@@ -44,7 +44,7 @@ public class ZarrProductReaderTest_applySpectralAttributes {
         ZarrProductWriter.collectBandAttributes(sourceBand, attributes);
         assertThat(attributes.size(), is(2));
         //execution
-        ZarrProductReader.apply(attributes, targetBand);
+        ZarrProductReader.applyBandAttributes(attributes, targetBand);
         //verification
         assertThat(targetBand.getSpectralWavelength(), is(234.5f));
     }
@@ -56,7 +56,7 @@ public class ZarrProductReaderTest_applySpectralAttributes {
         ZarrProductWriter.collectBandAttributes(sourceBand, attributes);
         assertThat(attributes.size(), is(1));
         //execution
-        ZarrProductReader.apply(attributes, targetBand);
+        ZarrProductReader.applyBandAttributes(attributes, targetBand);
         //verification
         assertThat(targetBand.getSolarFlux(), is(24.3f));
     }
@@ -68,7 +68,7 @@ public class ZarrProductReaderTest_applySpectralAttributes {
         ZarrProductWriter.collectBandAttributes(sourceBand, attributes);
         assertThat(attributes.size(), is(1));
         //execution
-        ZarrProductReader.apply(attributes, targetBand);
+        ZarrProductReader.applyBandAttributes(attributes, targetBand);
         //verification
         assertThat(targetBand.getSpectralBandIndex(), is(24));
     }

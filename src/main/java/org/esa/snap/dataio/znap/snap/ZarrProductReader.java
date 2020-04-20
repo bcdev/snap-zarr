@@ -145,6 +145,7 @@ public class ZarrProductReader extends AbstractProductReader {
                     tiePointGrid.setDiscontinuity(((Number) attributes.get(DISCONTINUITY)).intValue());
                 }
                 product.addTiePointGrid(tiePointGrid);
+                applyRasterAttributes(attributes, tiePointGrid);
                 nodeAttributes.put(tiePointGrid, attributes);
             } else {
                 final Band band;
@@ -157,7 +158,7 @@ public class ZarrProductReader extends AbstractProductReader {
                 }
                 product.addBand(band);
                 nodeAttributes.put(band, attributes);
-                apply(attributes, band);
+                applyBandAttributes(attributes, band);
                 if (virtualBand) {
                     continue;
                 }
@@ -410,8 +411,25 @@ public class ZarrProductReader extends AbstractProductReader {
         throw new IllegalStateException("Data is provided by images");
     }
 
-    static void apply(Map<String, Object> attributes, Band band) {
+    static void applyBandAttributes(Map<String, Object> attributes, Band band) {
+        // TODO: 21.07.2019 SE -- units for bandwidth, wavelength, solarFlux
+        if (attributes.get(BANDWIDTH) != null) {
+            band.setSpectralBandwidth(((Number) attributes.get(BANDWIDTH)).floatValue());
+        }
+        if (attributes.get(WAVELENGTH) != null) {
+            band.setSpectralWavelength(((Number) attributes.get(WAVELENGTH)).floatValue());
+        }
+        if (attributes.get(SOLAR_FLUX) != null) {
+            band.setSolarFlux(((Number) attributes.get(SOLAR_FLUX)).floatValue());
+        }
+        if (attributes.get(SPECTRAL_BAND_INDEX) != null) {
+            band.setSpectralBandIndex(((Number) attributes.get(SPECTRAL_BAND_INDEX)).intValue());
+        }
         applySampleCodings(attributes, band);
+        applyRasterAttributes(attributes, band);
+    }
+
+    static void applyRasterAttributes(Map<String, Object> attributes, RasterDataNode band) {
         if (attributes.get(LONG_NAME) != null) {
             band.setDescription((String) attributes.get(LONG_NAME));
         }
@@ -433,18 +451,16 @@ public class ZarrProductReader extends AbstractProductReader {
         if (attributes.get(VALID_PIXEL_EXPRESSION) != null) {
             band.setValidPixelExpression((String) attributes.get(VALID_PIXEL_EXPRESSION));
         }
-        // TODO: 21.07.2019 SE -- units for bandwidth, wavelength, solarFlux
-        if (attributes.get(BANDWIDTH) != null) {
-            band.setSpectralBandwidth(((Number) attributes.get(BANDWIDTH)).floatValue());
-        }
-        if (attributes.get(WAVELENGTH) != null) {
-            band.setSpectralWavelength(((Number) attributes.get(WAVELENGTH)).floatValue());
-        }
-        if (attributes.get(SOLAR_FLUX) != null) {
-            band.setSolarFlux(((Number) attributes.get(SOLAR_FLUX)).floatValue());
-        }
-        if (attributes.get(SPECTRAL_BAND_INDEX) != null) {
-            band.setSpectralBandIndex(((Number) attributes.get(SPECTRAL_BAND_INDEX)).intValue());
+        if (attributes.get(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM) != null) {
+            final List matrix = (List) attributes.get(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM);
+            LOG.info("matrix for band '" + band.getName() + "' = " + Arrays.toString(matrix.toArray()));
+
+            final double[] ma = new double[matrix.size()];
+            for (int i = 0; i < matrix.size(); i++) {
+                ma[i] = (double) matrix.get(i);
+            }
+            final AffineTransform i2m = new AffineTransform(ma);
+            band.setImageToModelTransform(i2m);
         }
     }
 
@@ -459,19 +475,20 @@ public class ZarrProductReader extends AbstractProductReader {
             FlagCoding flagCoding = null;
             IndexCoding indexCoding = null;
             final Product product = band.getProduct();
+            String sampleCodingName = getSampleCodingName(attributes, rasterName);
             if (flagMasks != null) {
-                flagCoding = new FlagCoding(getSampleCodingName(attributes, rasterName));
+                flagCoding = new FlagCoding(sampleCodingName);
                 band.setSampleCoding(flagCoding);
                 product.getFlagCodingGroup().add(flagCoding);
             } else if (flagValues != null) {
-                indexCoding = new IndexCoding(getSampleCodingName(attributes, rasterName));
+                indexCoding = new IndexCoding(sampleCodingName);
                 band.setSampleCoding(indexCoding);
                 product.getIndexCodingGroup().add(indexCoding);
             } else {
                 LOG.warning("Raster attributes for '" + rasterName
-                                    + "' contains the attribute '" + FLAG_MEANINGS
-                                    + "' but neither an attribute '" + FLAG_MASKS
-                                    + "' nor an attribute '" + FLAG_VALUES + "'."
+                            + "' contains the attribute '" + FLAG_MEANINGS
+                            + "' but neither an attribute '" + FLAG_MASKS
+                            + "' nor an attribute '" + FLAG_VALUES + "'."
                 );
                 return;
             }

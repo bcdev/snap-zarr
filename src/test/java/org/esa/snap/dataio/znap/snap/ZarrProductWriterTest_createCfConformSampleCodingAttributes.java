@@ -45,7 +45,7 @@ public class ZarrProductWriterTest_createCfConformSampleCodingAttributes {
         ic.addIndex("i4", 4, "  d4  "); // deskription shall be trimmed
         ic.addIndex("i5", 5, "d5");
 
-        ZarrProductWriter.collectBandAttributes(band, cfConformSampleCodingAttributes);
+        ZarrProductWriter.collectSampleCodingAttributes(band, cfConformSampleCodingAttributes);
 
         assertThat(cfConformSampleCodingAttributes, is(notNullValue()));
         assertThat(cfConformSampleCodingAttributes.size(), is(4));
@@ -75,7 +75,7 @@ public class ZarrProductWriterTest_createCfConformSampleCodingAttributes {
         ic.addIndex("i4", 4, "  ");
         ic.addIndex("i5", 5, "   ");
 
-        ZarrProductWriter.collectBandAttributes(band, this.cfConformSampleCodingAttributes);
+        ZarrProductWriter.collectSampleCodingAttributes(band, this.cfConformSampleCodingAttributes);
 
         assertThat(cfConformSampleCodingAttributes, is(notNullValue()));
         assertThat(cfConformSampleCodingAttributes.size(), is(3));
@@ -102,7 +102,7 @@ public class ZarrProductWriterTest_createCfConformSampleCodingAttributes {
         fc.addFlag("f4", 0b00001000, "d4");
         fc.addFlag("f5", 0b00010000, "d5");
 
-        ZarrProductWriter.collectBandAttributes(band, this.cfConformSampleCodingAttributes);
+        ZarrProductWriter.collectSampleCodingAttributes(band, this.cfConformSampleCodingAttributes);
 
         assertThat(cfConformSampleCodingAttributes, is(notNullValue()));
         assertThat(cfConformSampleCodingAttributes.size(), is(4));
@@ -133,7 +133,7 @@ public class ZarrProductWriterTest_createCfConformSampleCodingAttributes {
         fc.addFlag("f4", 0b00001000, "  ");
         fc.addFlag("f5", 0b00010000, null);
 
-        ZarrProductWriter.collectBandAttributes(band, this.cfConformSampleCodingAttributes);
+        ZarrProductWriter.collectSampleCodingAttributes(band, this.cfConformSampleCodingAttributes);
 
         assertThat(cfConformSampleCodingAttributes, is(notNullValue()));
         assertThat(cfConformSampleCodingAttributes.size(), is(3));
@@ -163,7 +163,7 @@ public class ZarrProductWriterTest_createCfConformSampleCodingAttributes {
         fc.addFlag("fd", 0b00001100, 0b1100, "dd");
         fc.addFlag("f5", 0b00010000, "d5");
 
-        ZarrProductWriter.collectBandAttributes(band, this.cfConformSampleCodingAttributes);
+        ZarrProductWriter.collectSampleCodingAttributes(band, this.cfConformSampleCodingAttributes);
 
         assertThat(cfConformSampleCodingAttributes, is(notNullValue()));
         assertThat(cfConformSampleCodingAttributes.size(), is(5));
@@ -198,7 +198,7 @@ public class ZarrProductWriterTest_createCfConformSampleCodingAttributes {
         fc.addFlag("fd", 0b00001100, 0b1100, "  ");
         fc.addFlag("f5", 0b00010000, "");
 
-        ZarrProductWriter.collectBandAttributes(band, this.cfConformSampleCodingAttributes);
+        ZarrProductWriter.collectSampleCodingAttributes(band, this.cfConformSampleCodingAttributes);
 
         assertThat(cfConformSampleCodingAttributes, is(notNullValue()));
         assertThat(cfConformSampleCodingAttributes.size(), is(4));

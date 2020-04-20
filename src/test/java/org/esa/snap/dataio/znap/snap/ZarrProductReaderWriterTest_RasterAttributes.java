@@ -200,6 +200,6 @@ public class ZarrProductReaderWriterTest_RasterAttributes {
 
     private void transferToTarget() {
         ZarrProductWriter.collectRasterAttributes(source, attributes);
-        ZarrProductReader.apply(attributes, target);
+        ZarrProductReader.applyBandAttributes(attributes, target);
     }
 }

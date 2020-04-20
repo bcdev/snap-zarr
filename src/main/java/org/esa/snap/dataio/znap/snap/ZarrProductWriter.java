@@ -201,15 +201,13 @@ public class ZarrProductWriter extends AbstractProductWriter {
     }
 
     static void collectRasterAttributes(RasterDataNode rdNode, Map<String, Object> attributes) {
-
-        final int nodeDataType = rdNode.getDataType();
-
         if (rdNode.getDescription() != null) {
             attributes.put(LONG_NAME, rdNode.getDescription());
         }
         if (rdNode.getUnit() != null) {
             attributes.put(UNITS, tryFindUnitString(rdNode.getUnit()));
         }
+        final int nodeDataType = rdNode.getDataType();
         if (ProductData.isUIntType(nodeDataType)) {
             attributes.put(UNSIGNED, String.valueOf(true));
         }
@@ -217,6 +215,13 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
         if (isNotNullAndNotEmpty(rdNode.getValidPixelExpression())) {
             attributes.put(VALID_PIXEL_EXPRESSION, rdNode.getValidPixelExpression());
+        }
+        AffineTransform imageToModelTransform = rdNode.getImageToModelTransform();
+        if (!imageToModelTransform.isIdentity()) {
+            final double[] matrix = new double[6];
+            imageToModelTransform.getMatrix(matrix);
+            attributes.put(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM, matrix);
+
         }
     }
 
@@ -236,8 +241,6 @@ public class ZarrProductWriter extends AbstractProductWriter {
         if ((float) band.getSpectralBandIndex() >= 0) {
             attributes.put(SPECTRAL_BAND_INDEX, band.getSpectralBandIndex());
         }
-
-        collectSampleCodingAttributes(band, attributes);
     }
 
     private void addTimeAttribute(Map<String, Object> productAttributes, String attName, ProductData.UTC utc) {
@@ -258,7 +261,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
         return scaledData;
     }
 
-    private static void collectSampleCodingAttributes(Band band, Map<String, Object> attributes) {
+    static void collectSampleCodingAttributes(Band band, Map<String, Object> attributes) {
         final SampleCoding sampleCoding = band.getSampleCoding();
         if (sampleCoding == null) {
             return;
@@ -528,9 +531,10 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
     private Map<String, Object> collectBandAttributes(Band band) {
         final Map<String, Object> bandAttributes = new HashMap<>();
-        collectRasterAttributes(band, bandAttributes);
         collectBandAttributes(band, bandAttributes);
+        collectSampleCodingAttributes(band, bandAttributes);
         collectVirtualBandAttributes(band, bandAttributes);
+        collectRasterAttributes(band, bandAttributes);
         if (binaryWriterPlugIn != null) {
             bandAttributes.put(ATT_NAME_BINARY_FORMAT, binaryWriterPlugIn.getFormatNames()[0]);
         }
@@ -541,7 +545,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
         return bandAttributes;
     }
 
-    private static void collectVirtualBandAttributes(Band band, Map<String, Object> bandAttributes) {
+    static void collectVirtualBandAttributes(Band band, Map<String, Object> bandAttributes) {
         if (band instanceof VirtualBand) {
             final VirtualBand virtualBand = (VirtualBand) band;
             bandAttributes.put(VIRTUAL_BAND_EXPRESSION, virtualBand.getExpression());

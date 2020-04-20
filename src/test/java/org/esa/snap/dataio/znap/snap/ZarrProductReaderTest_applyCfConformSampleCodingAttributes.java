@@ -37,7 +37,7 @@ public class ZarrProductReaderTest_applyCfConformSampleCodingAttributes {
         attributes.put(FLAG_MASKS, Arrays.asList(m1, m2, m3));
 
         // execution
-        ZarrProductReader.apply(attributes, band);
+        ZarrProductReader.applyBandAttributes(attributes, band);
 
         // verification
         assertThat(band.isFlagBand(), is(true));
@@ -71,7 +71,7 @@ public class ZarrProductReaderTest_applyCfConformSampleCodingAttributes {
         attributes.put(FLAG_DESCRIPTIONS, Arrays.asList("d1", "d2", "d3"));
 
         // execution
-        ZarrProductReader.apply(attributes, band);
+        ZarrProductReader.applyBandAttributes(attributes, band);
 
         // verification
         assertThat(band.isFlagBand(), is(true));
@@ -106,7 +106,7 @@ public class ZarrProductReaderTest_applyCfConformSampleCodingAttributes {
         attributes.put(NAME_SAMPLE_CODING, "SCName");
 
         // execution
-        ZarrProductReader.apply(attributes, band);
+        ZarrProductReader.applyBandAttributes(attributes, band);
 
         // verification
         assertThat(band.isFlagBand(), is(true));
@@ -157,7 +157,7 @@ public class ZarrProductReaderTest_applyCfConformSampleCodingAttributes {
                                                   v3_1, v3_2, v3_3, v3_4, v3_5, v3_6, v3_7));
 
         // execution
-        ZarrProductReader.apply(attributes, band);
+        ZarrProductReader.applyBandAttributes(attributes, band);
 
         // verification
         assertThat(band.isFlagBand(), is(true));
@@ -237,7 +237,7 @@ public class ZarrProductReaderTest_applyCfConformSampleCodingAttributes {
                                                         "d3_1", "d3_2", "d3_3", "d3_4", "d3_5", "d3_6", "d3_7"));
 
         // execution
-        ZarrProductReader.apply(attributes, band);
+        ZarrProductReader.applyBandAttributes(attributes, band);
 
         // verification
         assertThat(band.isFlagBand(), is(true));
@@ -318,7 +318,7 @@ public class ZarrProductReaderTest_applyCfConformSampleCodingAttributes {
         attributes.put(NAME_SAMPLE_CODING, "SCName");
 
         // execution
-        ZarrProductReader.apply(attributes, band);
+        ZarrProductReader.applyBandAttributes(attributes, band);
 
         // verification
         assertThat(band.isFlagBand(), is(true));
