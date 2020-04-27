@@ -25,7 +25,6 @@ import java.nio.file.Paths;
 final class ZnapConstantsAndUtils {
 
     public static final String PROPERTY_NAME_COMPRESSON_LEVEL = "znap.compresson.level";
-    public static final String PROPERTY_NAME_MAX_WRITE_THREADS = "znap.num.write.threads";
     public static final String PROPERTY_NAME_BINARY_FORMAT = "znap.binary.format";
 
     public static final int IDX_WIDTH = 1;
