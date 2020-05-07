@@ -127,7 +127,7 @@
                 </dependencies>
                 <configuration>
                     <requiresRestart>true</requiresRestart>
-                    <sourceManifestFile>target/nbm/manifest.mf</sourceManifestFile>
+                    <!--<sourceManifestFile>target/nbm/manifest.mf</sourceManifestFile>-->
                 </configuration>
             </plugin>
             <plugin>

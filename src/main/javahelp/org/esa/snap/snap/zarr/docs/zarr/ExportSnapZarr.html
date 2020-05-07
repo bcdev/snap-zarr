@@ -14,10 +14,11 @@
   ~ with this program; if not, see http://www.gnu.org/licenses/
   -->
 
-<html>
+<html lang="uk">
 <head>
     <title>Sentinel Toolbox Help - Export SNAP-ZARR</title>
     <link rel="stylesheet" href="../style.css">
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
 </head>
 
 <body>
@@ -34,13 +35,55 @@
     </tr>
 </table>
 
+<table>
+    <tr>
+        <td colspan="3"> &nbsp; &nbsp; &nbsp;</td>
+    </tr>
+    <tr>
+        <td> &nbsp; &nbsp; &nbsp;</td>
+        <td>
+            <h4>
+                ⚠ ⚠ ⚠ Attention! ⚠ ⚠ ⚠
+            </h4>
+            <h4>This reader/writer - format is a beta version.</h4>
+            <p>
+                This format will replace the BEAM-DIMAP format in the near future.
+            </p>
+            <p>
+                Using this format for production purposes is not yet recommended, as parts of the format may still
+                change.<br>
+                However, it would be very helpful if you use this format for testing purposes to give us feedback.<br>
+                In order to optimize the reader/writer in the best possible way for the requirements<br>
+                of the users, feedback is very welcome.
+                For Feedback please use
+                <object classid="java:org.netbeans.modules.javahelp.BrowserDisplayer">
+                    <param name="content" value="https://forum.step.esa.int/c/snap/">
+                    <param name="text" value="<html><u>the SNAP Forum.</u></html>">
+                </object>
+            </p>
+        </td>
+        <td> &nbsp; &nbsp; &nbsp;</td>
+    </tr>
+    <tr>
+        <td colspan="3"> &nbsp; &nbsp; &nbsp;</td>
+    </tr>
+</table>
 
 <h3>Export SNAP-ZARR Product</h3>
 
 <p>This command allows to export the data of the current product to SNAP-ZARR format.</p>
 
-<p>SNAP-ZARR uses the <a href="https://jzarr.readthedocs.io/en/latest/">JZarr framework</a>, which is a Java
-    implementation of the <a href="https://zarr.readthedocs.io/en/stable/index.html">Python Zarr library</a>.
+<p>SNAP-ZARR uses the
+    <object classid="java:org.netbeans.modules.javahelp.BrowserDisplayer">
+        <param name="content" value="https://jzarr.readthedocs.io/en/latest/">
+        <param name="text" value="<html><u>JZarr framework</u></html>">
+    </object>
+    , which is a Java implementation of the
+    <object classid="java:org.netbeans.modules.javahelp.BrowserDisplayer">
+        <param name="content" value="https://zarr.readthedocs.io/en/stable/index.html">
+        <param name="text" value="<html><u>Python Zarr library.</u></html>">
+    </object>
+</p>
 
 <h3>Constraints of created SNAP-ZARR product files</h3>
 
@@ -49,7 +92,10 @@
     further groups or zarr arrays. Subgroups are used to group related data. Raster data are stored
     in zarr arrays.<br/>
     An exported product is fully compatible and thus directly processable with the
-    <a href="https://zarr.readthedocs.io/en/stable/index.html">Python Zarr library</a>.
+    <object classid="java:org.netbeans.modules.javahelp.BrowserDisplayer">
+        <param name="content" value="https://zarr.readthedocs.io/en/stable/index.html">
+        <param name="text" value="<html><u>Python Zarr library.</u></html>">
+    </object>
 </p>
 <ul>
     <li>Name and type of the product.</li>
