@@ -42,9 +42,17 @@
             </folder>
             <folder name="Export">
                 <file name="org-esa-snap-dataio-znap-ExportSnapZarrProduct.shadow">
-                    <attr name="originalFile" stringvalue="Actions/Writers/org-esa-snap-dataio-znap-ExportSnapZarrProduct.instance"/>
+                    <attr name="originalFile"
+                          stringvalue="Actions/Writers/org-esa-snap-dataio-znap-ExportSnapZarrProduct.instance"/>
                 </file>
             </folder>
+        </folder>
+    </folder>
+    <folder name="Services">
+        <folder name="JavaHelp">
+            <file name="org-esa-snap-dataio-znap-helpset.xml" url="helpset.xml">
+                <attr name="position" intvalue="27364923"/>
+            </file>
         </folder>
     </folder>
 

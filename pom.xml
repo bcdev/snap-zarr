@@ -10,6 +10,7 @@
 
     <properties>
         <snap.version>8.0.0-SNAPSHOT</snap.version>
+        <javahelp.version>2.0.05</javahelp.version>
     </properties>
 
     <packaging>nbm</packaging>
@@ -117,16 +118,16 @@
                 <artifactId>nbm-maven-plugin</artifactId>
                 <version>4.4</version>
                 <extensions>true</extensions>
-                <!--<dependencies>-->
-                <!--<dependency>-->
-                <!--<groupId>javax.help</groupId>-->
-                <!--<artifactId>javahelp</artifactId>-->
-                <!--<version>${javahelp.version}</version>-->
-                <!--</dependency>-->
-                <!--</dependencies>-->
+                <dependencies>
+                    <dependency>
+                        <groupId>javax.help</groupId>
+                        <artifactId>javahelp</artifactId>
+                        <version>${javahelp.version}</version>
+                    </dependency>
+                </dependencies>
                 <configuration>
                     <requiresRestart>true</requiresRestart>
-                    <!--<sourceManifestFile>target/nbm/manifest.mf</sourceManifestFile>-->
+                    <sourceManifestFile>target/nbm/manifest.mf</sourceManifestFile>
                 </configuration>
             </plugin>
             <plugin>

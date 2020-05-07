@@ -1,0 +1,86 @@
+<!--
+  ~ Copyright (C) 2010 Brockmann Consult GmbH (info@brockmann-consult.de)
+  ~
+  ~ This program is free software; you can redistribute it and/or modify it
+  ~ under the terms of the GNU General Public License as published by the Free
+  ~ Software Foundation; either version 3 of the License, or (at your option)
+  ~ any later version.
+  ~ This program is distributed in the hope that it will be useful, but WITHOUT
+  ~ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  ~ FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+  ~ more details.
+  ~
+  ~ You should have received a copy of the GNU General Public License along
+  ~ with this program; if not, see http://www.gnu.org/licenses/
+  -->
+
+<html>
+<head>
+    <title>Sentinel Toolbox Help - Export SNAP-ZARR</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+
+<body>
+<table class="header">
+    <tr class="header">
+        <td class="header">&nbsp;
+            Export SNAP-ZARR
+        </td>
+
+        <td class="header" align="right"><a
+                href="nbdocs://org.esa.snap.snap.help/org/esa/snap/snap/help/docs/general/overview/SnapOverview.html"><img
+                src="../images/snap_header.jpg"
+                border=0></a></td>
+    </tr>
+</table>
+
+
+<h3>Export SNAP-ZARR Product</h3>
+
+<p>This command allows to export the data of the current product to SNAP-ZARR format.</p>
+
+<p>SNAP-ZARR uses the <a href="https://jzarr.readthedocs.io/en/latest/">JZarr framework</a>, which is a Java
+    implementation of the <a href="https://zarr.readthedocs.io/en/stable/index.html">Python Zarr library</a>.
+
+<h3>Constraints of created SNAP-ZARR product files</h3>
+
+<p> The exported product consists of a root zarr group and zarr-sub-groups and/or zarr-arrays.
+    The root node contains meta information related to the product. The child nodes can then be
+    further groups or zarr arrays. Subgroups are used to group related data. Raster data are stored
+    in zarr arrays.<br/>
+    An exported product is fully compatible and thus directly processable with the
+    <a href="https://zarr.readthedocs.io/en/stable/index.html">Python Zarr library</a>.
+</p>
+<ul>
+    <li>Name and type of the product.</li>
+    <li>Name, description and unit of each band.</li>
+    <li>The properties of no-data and scaling for each band.</li>
+    <li>The index coding of a band.</li>
+    <li>Virtual and filtered bands.</li>
+    <li>etc.</li>
+</ul>
+<p>
+    For features and limitations of the SNAP-ZARR export and constraints of interaction with other GIS tools please see
+    the following list:
+</p>
+<ul>
+    <li>All bands of a SNAP-ZARR file must have the same data type. Therefor a common data type is identified which
+        fits for all bands. Double precision data type is not supported.
+    </li>
+    <li>The data of a band is always written raw and unscaled.
+    </li>
+    <li>Virtual and filtered bands can only be reimported by the Sentinel Toolbox.</li>
+    <li>All projections available in SNAP are also supported by the SNAP-ZARR writer.
+        As a fallback, if a map projection or other geocoding is not directly supported a tie-point grid is written to
+        the SNAP-ZARR file.<br/>
+        The exported SNAP-ZARR files were tested for compatibility with ENVI and ArcGis. While the files are fully
+        compatible with ENVI, ArcGIS has problems to understand stereographic projections.
+    </li>
+    <li>An index coded band can only be correctly decoded by other GIS tools, if it is written as an image with one
+        band.
+    </li>
+</ul>
+
+<hr>
+</body>
+</html>
