@@ -38,7 +38,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
     public ZarrProductWriter(final ZarrProductWriterPlugIn productWriterPlugIn) {
         super(productWriterPlugIn);
-        compressor = CompressorFactory.create("zlib", getCompressionLevel(3));
+        compressor = CompressorFactory.create(getCompressorId("zlib"), getCompressionLevel(3));
         binaryWriterPlugIn = getBinaryWriterPlugin(productWriterPlugIn);
     }
 
@@ -376,8 +376,17 @@ public class ZarrProductWriter extends AbstractProductWriter {
         }
     }
 
+    private String getCompressorId(String defaultCompressorId) {
+        String compId = System.getProperty(PROPERTY_NAME_COMPRESSOR_ID, "" + defaultCompressorId);
+        compId = compId != null ? compId.trim() : compId;
+        if (!defaultCompressorId.equals(compId)) {
+            LOG.info("Znap format product writer will use '" + compId + "' compression.");
+        }
+        return compId;
+    }
+
     private int getCompressionLevel(int defaultCompressionLevel) {
-        final String value = System.getProperty(PROPERTY_NAME_COMPRESSON_LEVEL, "" + defaultCompressionLevel);
+        final String value = System.getProperty(PROPERTY_NAME_COMPRESSION_LEVEL, "" + defaultCompressionLevel);
         final int compressionLevel = Integer.parseInt(value);
         if (compressionLevel != defaultCompressionLevel) {
             LOG.info("Znap format product writer will use " + compressionLevel + " compression level.");

@@ -37,48 +37,50 @@
 
 <table>
     <tr>
-        <td colspan="3"> &nbsp; &nbsp; &nbsp;</td>
+        <td colspan="3"> &nbsp;</td>
     </tr>
     <tr>
         <td> &nbsp; &nbsp; &nbsp;</td>
         <td>
             <h4>
-                ⚠ ⚠ ⚠ Attention! ⚠ ⚠ ⚠
+                ⚠ ⚠ ⚠ Your attention, please! ⚠ ⚠ ⚠
             </h4>
-            <h4>This reader/writer - format is a beta version.</h4>
+            <h4>This writer is available as beta version.</h4>
             <p>
-                This format will replace the BEAM-DIMAP format in the near future.
+                In the near future, this writer will become the default writer for the SNAP application to
+                replace BEAM-DIMAP.
             </p>
             <p>
                 Using this format for production purposes is not yet recommended, as parts of the format may still
-                change.<br>
-                However, it would be very helpful if you use this format for testing purposes to give us feedback.<br>
-                In order to optimize the reader/writer in the best possible way for the requirements<br>
-                of the users, feedback is very welcome.
-                For Feedback please use
+                change. However, it would be very helpful if you use this format for testing purposes to give us
+                feedback.</p>
+            <p>
+                To send us feedback please use the following
                 <object classid="java:org.netbeans.modules.javahelp.BrowserDisplayer">
                     <param name="content" value="https://forum.step.esa.int/c/snap/">
-                    <param name="text" value="<html><u>the SNAP Forum.</u></html>">
+                    <param name="text" value="<html><u>SNAP forum thread.</u></html>">
                 </object>
             </p>
         </td>
         <td> &nbsp; &nbsp; &nbsp;</td>
     </tr>
     <tr>
-        <td colspan="3"> &nbsp; &nbsp; &nbsp;</td>
+        <td colspan="3"> &nbsp;</td>
     </tr>
 </table>
 
 <h3>Export SNAP-ZARR Product</h3>
 
-<p>This command allows to export the data of the current product to SNAP-ZARR format.</p>
+<p>This writer allows to export the data of the current product to SNAP-ZARR format.</p>
+<p>An exported product is fully compatible with the Python Zarr library and can be processed directly.</p>
 
 <p>SNAP-ZARR uses the
     <object classid="java:org.netbeans.modules.javahelp.BrowserDisplayer">
         <param name="content" value="https://jzarr.readthedocs.io/en/latest/">
-        <param name="text" value="<html><u>JZarr framework</u></html>">
+        <param name="text" value="<html><u>JZarr framework.</u></html>">
     </object>
-    , which is a Java implementation of the
+    <br>
+    JZarr is a Java implementation of the
     <object classid="java:org.netbeans.modules.javahelp.BrowserDisplayer">
         <param name="content" value="https://zarr.readthedocs.io/en/stable/index.html">
         <param name="text" value="<html><u>Python Zarr library.</u></html>">
@@ -86,47 +88,82 @@
 </p>
 
 <h3>Constraints of created SNAP-ZARR product files</h3>
-
-<p> The exported product consists of a root zarr group and zarr-sub-groups and/or zarr-arrays.
-    The root node contains meta information related to the product. The child nodes can then be
-    further groups or zarr arrays. Subgroups are used to group related data. Raster data are stored
-    in zarr arrays.<br/>
-    An exported product is fully compatible and thus directly processable with the
+<h5>Root Group</h5>
+<p>
+    The exported product consists of a zarr group at the highest level. This product root group contains meta
+    information that refers to the product such as product name, product description, product type,
+    sensing start/end, geocoding, ...
+</p>
+<p><img src="../images/prod_att_75.png"></p>
+<h5>Raster Data</h5>
+<p> Raster data (e.g. bands and tie point grids) are written as chunked, compressed, N-dimensional zarr arrays within
+    the root group. To achieve the highest possible speed when writing data, the chunk size is aligned to the
+    tile size of the data.
+</p>
+<p>
+    Besides the chunked binary data, the data type, compression type, shape, chunk size, etc. are written to a
+    <span class="code">.zarray</span> file. <br><br>
+    <img src="../images/array_75.png"><br>
+    The meaning of the zarr specific values in the <span class="code">.zarray</span> file is explained in detail in
+    the documentation of the
     <object classid="java:org.netbeans.modules.javahelp.BrowserDisplayer">
-        <param name="content" value="https://zarr.readthedocs.io/en/stable/index.html">
-        <param name="text" value="<html><u>Python Zarr library.</u></html>">
+        <param name="content" value="https://zarr.readthedocs.io/en/stable/spec/v2.html#arrays">
+        <param name="text" value="<html><u>Python Zarr Array.</u></html>">
     </object>
 </p>
-<ul>
-    <li>Name and type of the product.</li>
-    <li>Name, description and unit of each band.</li>
-    <li>The properties of no-data and scaling for each band.</li>
-    <li>The index coding of a band.</li>
-    <li>Virtual and filtered bands.</li>
-    <li>etc.</li>
-</ul>
 <p>
-    For features and limitations of the SNAP-ZARR export and constraints of interaction with other GIS tools please see
-    the following list:
+    Such raster data zarr arrays also contains metadata that refers to the raster such as e.g. long_name,
+    wavelength and unit, valid_pixel_expression, flag mask meaning and description or offsets, etc<br>
+    See examples <a href="#examples">below</a>.
 </p>
+
+<h3>Features</h3>
 <ul>
-    <li>All bands of a SNAP-ZARR file must have the same data type. Therefor a common data type is identified which
-        fits for all bands. Double precision data type is not supported.
+    <li>
+        The SNAP-ZARR reader/writer works with a java path object as input and can read and write directly from
+        or into a cloud. Currently Snap is not yet able to connect to a cloud (e.g. Amazon AWS S3 Bucket). But if
+        this should be implemented in SNAP, SNAP-ZARR is immediately cloud ready.<br>
+        See example: <span class="code">https://jzarr.readthedocs.io/en/latest/amazonS3.html</span>
     </li>
-    <li>The data of a band is always written raw and unscaled.
+    <li>
+        Raster data can be written compressed or uncompressed.<br>
+        Default is zlib compression with compression level 3.<br>
+        If you are using the SNAP application you will find a tab "SNAP-ZARR" in the Options dialog to switch
+        off compression or change the compression level.<br>
+        In case you use the writer in a command line application, you can start the application with the JVM argument
+        <span class="code">-Dznap.compressor.lib=null</span> to disable compression or with the JVM argument
+        <span class="code">-Dznap.compression.level=X</span> to change the compression level. Valid value range
+        for <span class="code">X</span> is <span class="code">0-9</span>.
     </li>
-    <li>Virtual and filtered bands can only be reimported by the Sentinel Toolbox.</li>
-    <li>All projections available in SNAP are also supported by the SNAP-ZARR writer.
-        As a fallback, if a map projection or other geocoding is not directly supported a tie-point grid is written to
-        the SNAP-ZARR file.<br/>
-        The exported SNAP-ZARR files were tested for compatibility with ENVI and ArcGis. While the files are fully
-        compatible with ENVI, ArcGIS has problems to understand stereographic projections.
+    <li>
+        Instead of writing raster data as chunked zarr arrays the data instead also can be written using an already
+        available writer like ENVI or GeoTiff.<br>
+        Warnig! If this option is used, the writing speed can be dramatically decreased.
+        To switch the binary format you can use the options dialog, tab SNAP-ZARR, or you can use the JVM argument
+        <span class="code">-Dznap.binary.format=&lt;FORMATNAME&gt;</span>
     </li>
-    <li>An index coded band can only be correctly decoded by other GIS tools, if it is written as an image with one
-        band.
+    <li>
+        All projections available in SNAP are also supported by the SNAP-ZARR writer.
     </li>
 </ul>
 
+<hr>
+
+<a name="examples"></a>
+<h3>Examples</h3>
+
+<p>
+    Metadata example for an optical raster:<br>
+    <img src="../images/band_att_75.png"/>
+</p>
+<p>
+    Metadata example for flag raster data:<br>
+    <img src="../images/flag_att_75.png"/>
+</p>
+<p>
+    Metadata example for tie point raster data:<br>
+    <img src="../images/tie_point_att_75.png"/>
+</p>
 <hr>
 </body>
 </html>
