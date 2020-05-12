@@ -14,14 +14,17 @@ import org.netbeans.spi.options.OptionsPanelController;
 import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
 
-@OptionsPanelController.SubRegistration(
-        displayName = "#AdvancedOption_DisplayName_Writer",
+@OptionsPanelController.TopLevelRegistration(
+        categoryName = "#AdvancedOption_DisplayName_Writer",
+        iconBase = "org/esa/snap/dataio/znap/images/SNAP_data_32.png",
         keywords = "#AdvancedOption_Keywords_Writer",
-        keywordsCategory = "Advanced/Writer"
+        keywordsCategory = "SNAP-ZARR",
+        position = 1600
 )
+
 @org.openide.util.NbBundle.Messages({
         "AdvancedOption_DisplayName_Writer=SNAP-ZARR",
-        "AdvancedOption_Keywords_Writer=data/zarr"
+        "AdvancedOption_Keywords_Writer=data,zarr,io,reader,writer"
 })
 public final class WriterOptionsPanelController extends OptionsPanelController {
 
