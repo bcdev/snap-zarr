@@ -5,6 +5,9 @@
  */
 package org.esa.snap.dataio.znap.preferences;
 
+import javax.swing.JLabel;
+import javax.swing.border.EtchedBorder;
+
 final class WriterPanel extends javax.swing.JPanel {
 
     private final WriterOptionsPanelController controller;
@@ -22,7 +25,7 @@ final class WriterPanel extends javax.swing.JPanel {
      */
     // <editor-fold defaultstate="collapsed" desc="Generated Code">
     private void initComponents() {
-
+        setBorder(new EtchedBorder());
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
@@ -33,6 +36,8 @@ final class WriterPanel extends javax.swing.JPanel {
                 layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                         .addGap(0, 68, Short.MAX_VALUE)
         );
+        add(new JLabel("TEST"));
+
     }// </editor-fold>
 
     void load() {
