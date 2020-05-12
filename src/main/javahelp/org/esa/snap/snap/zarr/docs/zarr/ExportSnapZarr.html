@@ -88,6 +88,7 @@
 </p>
 
 <h3>Constraints of created SNAP-ZARR product files</h3>
+
 <h5>Root Group</h5>
 <p>
     The exported product consists of a zarr group at the highest level. This product root group contains meta
@@ -95,6 +96,13 @@
     sensing start/end, geocoding, ...
 </p>
 <p><img src="../images/prod_att_75.png"></p>
+<p>
+    General information about how a group is saved can be found here.
+    <object classid="java:org.netbeans.modules.javahelp.BrowserDisplayer">
+        <param name="content" value="https://jzarr.readthedocs.io/en/latest/tutorial.html#groups">
+        <param name="text" value="<html><u>here.</u></html>">
+    </object>
+</p>
 <h5>Raster Data</h5>
 <p> Raster data (e.g. bands and tie point grids) are written as chunked, compressed, N-dimensional zarr arrays within
     the root group. To achieve the highest possible speed when writing data, the chunk size is aligned to the
@@ -116,6 +124,13 @@
     wavelength and unit, valid_pixel_expression, flag mask meaning and description or offsets, etc<br>
     See examples <a href="#examples">below</a>.
 </p>
+<p>
+    General information about how an array is stored can be found
+    <object classid="java:org.netbeans.modules.javahelp.BrowserDisplayer">
+        <param name="content" value="https://jzarr.readthedocs.io/en/latest/tutorial.html#persistent-arrays">
+        <param name="text" value="<html><u>here.</u></html>">
+    </object>
+</p>
 
 <h3>Features</h3>
 <ul>
@@ -131,7 +146,7 @@
         If you are using the SNAP application you will find a tab "SNAP-ZARR" in the Options dialog to switch
         off compression or change the compression level.<br>
         In case you use the writer in a command line application, you can start the application with the JVM argument
-        <span class="code">-Dznap.compressor.lib=null</span> to disable compression or with the JVM argument
+        <span class="code">-Dznap.compressor.id=null</span> to disable compression or with the JVM argument
         <span class="code">-Dznap.compression.level=X</span> to change the compression level. Valid value range
         for <span class="code">X</span> is <span class="code">0-9</span>.
     </li>
