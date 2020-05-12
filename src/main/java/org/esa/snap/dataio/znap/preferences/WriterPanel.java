@@ -5,6 +5,8 @@
  */
 package org.esa.snap.dataio.znap.preferences;
 
+import javax.swing.border.TitledBorder;
+
 final class WriterPanel extends javax.swing.JPanel {
 
     private final WriterOptionsPanelController controller;
@@ -22,7 +24,7 @@ final class WriterPanel extends javax.swing.JPanel {
      */
     // <editor-fold defaultstate="collapsed" desc="Generated Code">
     private void initComponents() {
-
+        setBorder(new TitledBorder("Reader Options"));
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(

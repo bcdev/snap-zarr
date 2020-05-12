@@ -15,6 +15,7 @@ import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
 
 @OptionsPanelController.SubRegistration(
+        id = "SNAP-ZARR",
         displayName = "#AdvancedOption_DisplayName_Writer",
         keywords = "#AdvancedOption_Keywords_Writer",
         keywordsCategory = "Advanced/Writer"
