@@ -16,13 +16,12 @@
  */
 package org.esa.snap.dataio.znap.snap;
 
-import ucar.nc2.constants.CDM;
 import ucar.nc2.constants.CF;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public final class CFConstantsAndUtils implements CF, CDM {
+public final class CFConstantsAndUtils {
 
     // CF sample coding attributes
     public static final String FLAG_VALUES = "flag_values";

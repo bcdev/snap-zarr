@@ -40,8 +40,14 @@ import static org.esa.snap.core.util.Guardian.*;
 import static org.esa.snap.core.util.SystemUtils.LOG;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
-import static ucar.nc2.constants.CDM.TIME_END;
-import static ucar.nc2.constants.CDM.TIME_START;
+import static ucar.nc2.constants.ACDD.TIME_END;
+import static ucar.nc2.constants.ACDD.TIME_START;
+import static ucar.nc2.constants.CDM.FILL_VALUE;
+import static ucar.nc2.constants.CF.ADD_OFFSET;
+import static ucar.nc2.constants.CF.LONG_NAME;
+import static ucar.nc2.constants.CF.MISSING_VALUE;
+import static ucar.nc2.constants.CF.SCALE_FACTOR;
+import static ucar.nc2.constants.CF.UNITS;
 
 public class ZarrProductReader extends AbstractProductReader {
 

@@ -38,12 +38,9 @@ public final class WriterOptionsPanelController extends OptionsPanelController {
     }
 
     public void applyChanges() {
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                getPanel().store();
-                changed = false;
-            }
+        SwingUtilities.invokeLater(() -> {
+            getPanel().store();
+            changed = false;
         });
     }
 
@@ -60,7 +57,7 @@ public final class WriterOptionsPanelController extends OptionsPanelController {
     }
 
     public HelpCtx getHelpCtx() {
-        return null; // new HelpCtx("...ID") if you have a help set
+        return new HelpCtx("exportSnapZarrProduct"); // new HelpCtx("...ID") if you have a help set
     }
 
     public JComponent getComponent(Lookup masterLookup) {

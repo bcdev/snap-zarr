@@ -11,6 +11,8 @@ import org.esa.snap.core.dataio.dimap.DimapProductConstants;
 import org.esa.snap.core.dataio.geocoding.ComponentGeoCoding;
 import org.esa.snap.core.dataio.geocoding.GeoRaster;
 import org.esa.snap.core.datamodel.*;
+import org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants;
+import org.esa.snap.runtime.Config;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import ucar.ma2.InvalidRangeException;
 
@@ -20,15 +22,26 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.prefs.Preferences;
 
 import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.*;
 import static org.esa.snap.core.util.StringUtils.isNotNullAndNotEmpty;
 import static org.esa.snap.core.util.SystemUtils.LOG;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
+import static ucar.nc2.constants.ACDD.TIME_END;
+import static ucar.nc2.constants.ACDD.TIME_START;
+import static ucar.nc2.constants.CDM.FILL_VALUE;
+import static ucar.nc2.constants.CDM.UNSIGNED;
+import static ucar.nc2.constants.CF.ADD_OFFSET;
+import static ucar.nc2.constants.CF.LONG_NAME;
+import static ucar.nc2.constants.CF.SCALE_FACTOR;
+import static ucar.nc2.constants.CF.UNITS;
 
 public class ZarrProductWriter extends AbstractProductWriter {
 
+    public static final String DEFAULT_COMPRESSOR_ID = "zlib";
+    public static final int DEFAULT_COMPRESSION_LEVEL = 3;
     private final HashMap<Band, BinaryWriter> zarrWriters = new HashMap<>();
     private final Compressor compressor;
     private final ProductWriterPlugIn binaryWriterPlugIn;
@@ -38,7 +51,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
     public ZarrProductWriter(final ZarrProductWriterPlugIn productWriterPlugIn) {
         super(productWriterPlugIn);
-        compressor = CompressorFactory.create(getCompressorId("zlib"), getCompressionLevel(3));
+        compressor = CompressorFactory.create(getCompressorId(), getCompressionLevel());
         binaryWriterPlugIn = getBinaryWriterPlugin(productWriterPlugIn);
     }
 
@@ -376,19 +389,19 @@ public class ZarrProductWriter extends AbstractProductWriter {
         }
     }
 
-    private String getCompressorId(String defaultCompressorId) {
-        String compId = System.getProperty(PROPERTY_NAME_COMPRESSOR_ID, "" + defaultCompressorId);
-        compId = compId != null ? compId.trim() : compId;
-        if (!defaultCompressorId.equals(compId)) {
-            LOG.info("Znap format product writer will use '" + compId + "' compression.");
+    private String getCompressorId() {
+        String compressorID = getPreference(ZnapPreferencesConstants.PROPERTY_NAME_COMPRESSOR_ID, DEFAULT_COMPRESSOR_ID);
+        compressorID = compressorID != null ? compressorID.trim() : compressorID;
+        if (!DEFAULT_COMPRESSOR_ID.equals(compressorID)) {
+            LOG.info("Znap format product writer will use '" + compressorID + "' compression.");
         }
-        return compId;
+        return compressorID;
     }
 
-    private int getCompressionLevel(int defaultCompressionLevel) {
-        final String value = System.getProperty(PROPERTY_NAME_COMPRESSION_LEVEL, "" + defaultCompressionLevel);
+    private int getCompressionLevel() {
+        final String value = getPreference(ZnapPreferencesConstants.PROPERTY_NAME_COMPRESSION_LEVEL, "" + DEFAULT_COMPRESSION_LEVEL);
         final int compressionLevel = Integer.parseInt(value);
-        if (compressionLevel != defaultCompressionLevel) {
+        if (compressionLevel != DEFAULT_COMPRESSION_LEVEL) {
             LOG.info("Znap format product writer will use " + compressionLevel + " compression level.");
         }
         return compressionLevel;
@@ -396,7 +409,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
     private ProductWriterPlugIn getBinaryWriterPlugin(ZarrProductWriterPlugIn productWriterPlugIn) {
         String defaultBinaryFormatName = productWriterPlugIn.getFormatNames()[0];
-        final String binaryFormatName = System.getProperty(PROPERTY_NAME_BINARY_FORMAT, defaultBinaryFormatName);
+        final String binaryFormatName = getPreference(ZnapPreferencesConstants.PROPERTY_NAME_BINARY_FORMAT, defaultBinaryFormatName);
         if (defaultBinaryFormatName.equals(binaryFormatName)) {
             return null;
         }
@@ -406,6 +419,14 @@ public class ZarrProductWriter extends AbstractProductWriter {
             throw new IllegalArgumentException("Unable to write binary data as '" + binaryFormatName + "'.");
         }
         return writerPlugIn;
+    }
+
+    private String getPreference(String key, String _default) {
+        return getPreferences().get(key, _default);
+    }
+
+    private Preferences getPreferences() {
+        return Config.instance("snap_zarr").load().preferences();
     }
 
     private void writeTiePointGrid(TiePointGrid tiePointGrid) throws IOException {

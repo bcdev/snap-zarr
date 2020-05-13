@@ -17,16 +17,13 @@
 package org.esa.snap.dataio.znap.snap;
 
 import com.bc.zarr.DataType;
+import org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants;
 
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
 final class ZnapConstantsAndUtils {
-
-    public static final String PROPERTY_NAME_COMPRESSION_LEVEL = "znap.compression.level";
-    public static final String PROPERTY_NAME_COMPRESSOR_ID = "znap.compressor.id";
-    public static final String PROPERTY_NAME_BINARY_FORMAT = "znap.binary.format";
 
     public static final int IDX_WIDTH = 1;
     public static final int IDX_X = IDX_WIDTH;
@@ -49,7 +46,7 @@ final class ZnapConstantsAndUtils {
 
     public static final String NO_DATA_VALUE_USED = "no_data_value_used";
 
-    public static final String ATT_NAME_BINARY_FORMAT = PROPERTY_NAME_BINARY_FORMAT.replace(".", "_");
+    public static final String ATT_NAME_BINARY_FORMAT = ZnapPreferencesConstants.PROPERTY_NAME_BINARY_FORMAT.replace(".", "_");
     public static final String ATT_NAME_GEOCODING = "geocoding";
     public static final String ATT_NAME_GEOCODING_TYPE = "type";
     public static final String ATT_NAME_GEOCODING_SHARED = "shared";
