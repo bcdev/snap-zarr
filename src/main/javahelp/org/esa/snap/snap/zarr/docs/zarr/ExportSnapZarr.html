@@ -81,9 +81,8 @@
 <h5>
     The documentation of Zarr itself says:
 </h5>
-<p>Quote:</p>
 <p class="i1">
-    Zarr in gerneral is a Python package providing an implementation of compressed, chunked, N-dimensional arrays,
+    Zarr in general is a Python package providing an implementation of compressed, chunked, N-dimensional arrays,
     designed for use in parallel computing.</p>
 <p>
     Source reference and for detailed information, please refer to the documentation of the
@@ -96,22 +95,13 @@
 <h5>
     Measure Space on medium.com says:
 </h5>
-<p> Quote from the page:
-    <object classid="java:org.netbeans.modules.javahelp.BrowserDisplayer">
-        <param name="content"
-               value="https://medium.com/@measurespace/use-zarr-to-access-clound-storage-just-like-your-local-file-system-d67607cb128b">
-        <param name="text"
-               value="<html><u>Use Zarr to access cloud storage just like your local file system</u></html>">
-        <param name="textFontSize" value="12pt">
-    </object>
-</p>
 <div class="i1">
     <p>
         Zarr official website describes Zarr as a Python package providing an implementation of chunked, compressed,
         N-dimensional arrays.<br>
         Chunked indicates that Zarr can handle very large datasets and fast data access.<br>
         Compressed means that Zarr can save files using reasonable storge size which also means with less cost.<br>
-        N-dimensional arrarys reveals that Zarr can handle multi-dimension datasets just like Netcdf (e.g. geoscience
+        N-dimensional arrays reveals that Zarr can handle multi-dimension datasets just like Netcdf (e.g. geoscience
         datasets with time, x, y, and z four-dimensional datasets).
     </p>
     <p>Some highlights as follow:</p>
@@ -129,11 +119,23 @@
         (e.g. AWS S3) just like your local file system with the same convience of Netcdf format.
     </p>
 </div>
+<p>
+    <object classid="java:org.netbeans.modules.javahelp.BrowserDisplayer">
+        <param name="content"
+               value="https://medium.com/@measurespace/use-zarr-to-access-clound-storage-just-like-your-local-file-system-d67607cb128b">
+        <param name="text"
+               value="<html><u>Use Zarr to access cloud storage just like your local file system</u></html>">
+        <param name="textFontSize" value="12pt">
+    </object>
+</p>
+
 <h5>
     JZarr
 </h5>
 <p>
-    SNAP-ZARR uses the JZarr library.<br>
+    SNAP-ZARR uses the JZarr library. It is a Java implementation for the Zarr format and is still in development.
+    Currently it can write Zarr compatible data, but can't read all Zarr data. The reason is that not all compression
+    algorithms supported by Zarr are yet implemented in JZarr.<br>
     <object classid="java:org.netbeans.modules.javahelp.BrowserDisplayer">
         <param name="content" value="https://jzarr.readthedocs.io/en/latest/">
         <param name="text" value="<html><u>JZarr is a Java implementation of Zarr.</u></html>">
@@ -141,7 +143,7 @@
     </object>
 </p>
 
-<h3>Constraints of created SNAP-ZARR product files</h3>
+<h3>Components of a SNAP-Zarr product file</h3>
 <p>
     An exported product is fully compatible with the Python Zarr library and can be processed directly.
 </p>
