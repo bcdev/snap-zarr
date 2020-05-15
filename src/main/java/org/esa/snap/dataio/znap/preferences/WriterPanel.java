@@ -68,7 +68,7 @@ final class WriterPanel extends javax.swing.JPanel {
         // someCheckBox.setSelected(NbPreferences.forModule(WriterPanel.class).getBoolean("someFlag", false));
         // or:
         // someTextField.setText(SomeSystemOption.getDefault().getSomeStringProperty());
-        Preferences preferences = Config.instance("snap_zarr").load().preferences();
+        Preferences preferences = Config.instance("snap").load().preferences();
 
         String binaryFormat = preferences.get(PROPERTY_NAME_BINARY_FORMAT, ZARR_FORMAT_NAME);
         binaryFormatCombo.setSelectedItem(binaryFormat);
@@ -82,7 +82,7 @@ final class WriterPanel extends javax.swing.JPanel {
     }
 
     void store() {
-        Preferences preferences = Config.instance("snap_zarr").load().preferences();
+        Preferences preferences = Config.instance("snap").load().preferences();
         try {
             String selectedFormat = binaryFormatCombo.getItemAt(binaryFormatCombo.getSelectedIndex());
             if (!ZARR_FORMAT_NAME.equals(selectedFormat)) {

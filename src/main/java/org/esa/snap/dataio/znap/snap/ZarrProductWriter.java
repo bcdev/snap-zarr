@@ -426,7 +426,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
     }
 
     private Preferences getPreferences() {
-        return Config.instance("snap_zarr").load().preferences();
+        return Config.instance("snap").load().preferences();
     }
 
     private void writeTiePointGrid(TiePointGrid tiePointGrid) throws IOException {
