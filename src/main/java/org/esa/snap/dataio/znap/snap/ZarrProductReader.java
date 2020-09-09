@@ -572,18 +572,25 @@ public class ZarrProductReader extends AbstractProductReader {
                 attribute.setSynthetic(node.synthetic);
                 attribute.setUnit(node.unit);
                 final List<Double> data = (List<Double>) node.data._array;
+                int dataSize = data.size();
                 if (ProductData.TYPE_ASCII == node.dataType) {
-                    if (data.size() > 0) {
-                        final byte[] bytes = new byte[data.size()];
-                        for (int i = 0; i < data.size(); i++) {
+                    if (dataSize > 0) {
+                        final byte[] bytes = new byte[dataSize];
+                        for (int i = 0; i < dataSize; i++) {
                             Double c = data.get(i);
                             bytes[i] = c.byteValue();
                         }
                         attribute.getData().setElems(bytes);
                     }
                 } else {
-                    for (int i = 0; i < data.size(); i++) {
-                        Double v = data.get(i);
+                    for (int i = 0; i < dataSize; i++) {
+                        Object o = data.get(i);
+                        Double v = null;
+                        if (o instanceof String) {
+                            v = Double.parseDouble((String) o);
+                        } else {
+                            v = (Double) o;
+                        }
                         attribute.getData().setElemDoubleAt(i, v);
                     }
                 }
