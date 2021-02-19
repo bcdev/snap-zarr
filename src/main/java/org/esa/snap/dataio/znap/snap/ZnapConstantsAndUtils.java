@@ -17,11 +17,30 @@
 package org.esa.snap.dataio.znap.snap;
 
 import com.bc.zarr.DataType;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.ObjectCodec;
+import com.fasterxml.jackson.core.Version;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import org.esa.snap.core.datamodel.MetadataAttribute;
+import org.esa.snap.core.datamodel.MetadataElement;
+import org.esa.snap.core.datamodel.ProductData;
 import org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Iterator;
 
 final class ZnapConstantsAndUtils {
 
@@ -124,6 +143,189 @@ final class ZnapConstantsAndUtils {
             return SnapDataType.TYPE_UINT32;
         } else {
             throw new IllegalStateException();
+        }
+    }
+
+    private static final SimpleModule metadataModule;
+
+    static {
+        metadataModule = new SimpleModule("Metadata", new Version(1, 0, 0, null, null, null));
+        metadataModule.addSerializer(MetadataElement.class, new StdSerializer<MetadataElement>(MetadataElement.class) {
+            @Override
+            public void serialize(MetadataElement value, JsonGenerator gen, SerializerProvider provider) throws IOException {
+                gen.writeStartObject();
+                {
+                    gen.writeStringField("name", value.getName());
+                    writeNonEmptyStringField(gen, "description", value.getDescription());
+                    final MetadataAttribute[] attributes = value.getAttributes();
+                    if (attributes.length > 0) {
+                        gen.writeArrayFieldStart("attributes");
+                        for (MetadataAttribute attribute : attributes) {
+                            gen.writeObject(attribute);
+                        }
+                        gen.writeEndArray();
+                    }
+                    final MetadataElement[] elements = value.getElements();
+                    if (elements.length > 0) {
+                        gen.writeArrayFieldStart("elements");
+                        for (MetadataElement element : elements) {
+                            gen.writeObject(element);
+                        }
+                        gen.writeEndArray();
+                    }
+                }
+                gen.writeEndObject();
+            }
+        });
+        metadataModule.addDeserializer(MetadataElement.class, new StdDeserializer<MetadataElement>(MetadataElement.class) {
+            @Override
+            public MetadataElement deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JsonProcessingException {
+                final ObjectCodec codec = p.getCodec();
+                final JsonNode node = codec.readTree(p);
+                final String name = node.get("name").asText();
+                final MetadataElement element = new MetadataElement(name);
+                if (node.has("description")) {
+                    element.setDescription(node.get("description").asText());
+                }
+                if (node.has("attributes")) {
+                    final ArrayNode attributes = node.withArray("attributes");
+                    final Iterator<JsonNode> iterator = attributes.iterator();
+                    while (iterator.hasNext()) {
+                        JsonNode next = iterator.next();
+                        if (!next.isObject()) {
+                            throw new IllegalStateException("Object expected!");
+                        }
+                        final MetadataAttribute metadataAttribute = codec.readValue(next.traverse(codec), MetadataAttribute.class);
+                        element.addAttribute(metadataAttribute);
+                    }
+                }
+                if (node.has("elements")) {
+                    final ArrayNode elements = node.withArray("elements");
+                    final Iterator<JsonNode> iterator = elements.iterator();
+                    while (iterator.hasNext()) {
+                        JsonNode next = iterator.next();
+                        if(!next.isObject()) {
+                            throw new IllegalStateException("Object expected!");
+                        }
+                        final MetadataElement metadataElement = codec.readValue(next.traverse(codec), MetadataElement.class);
+                        element.addElement(metadataElement);
+                    }
+                }
+                return element;
+            }
+        });
+        metadataModule.addSerializer(MetadataAttribute.class, new StdSerializer<MetadataAttribute>(MetadataAttribute.class) {
+            @Override
+            public void serialize(MetadataAttribute value, JsonGenerator gen, SerializerProvider provider) throws IOException {
+                gen.writeStartObject();
+                {
+                    gen.writeStringField("name", value.getName());
+                    gen.writeBooleanField("readOnly", value.isReadOnly());
+                    gen.writeObjectField("data", value.getData());
+                    writeNonEmptyStringField(gen, "unit", value.getUnit());
+                    writeNonEmptyStringField(gen, "description", value.getDescription());
+                }
+                gen.writeEndObject();
+            }
+        });
+        metadataModule.addDeserializer(MetadataAttribute.class, new StdDeserializer<MetadataAttribute>(MetadataAttribute.class) {
+            @Override
+            public MetadataAttribute deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JsonProcessingException {
+                final ObjectCodec codec = p.getCodec();
+                final JsonNode node = codec.readTree(p);
+                final String name = node.get("name").asText();
+                final boolean readOnly = node.get("readOnly").asBoolean();
+                final ProductData data = codec.readValue(node.get("data").traverse(codec), ProductData.class);
+                final MetadataAttribute attribute = new MetadataAttribute(name, data, readOnly);
+                if (node.has("unit")) {
+                    attribute.setUnit(node.get("unit").asText());
+                }
+                if (node.has("description")) {
+                    attribute.setDescription(node.get("description").asText());
+                }
+                return attribute;
+            }
+        });
+        metadataModule.addSerializer(ProductData.class, new StdSerializer<ProductData>(ProductData.class) {
+            @Override
+            public void serialize(ProductData value, JsonGenerator gen, SerializerProvider provider) throws IOException {
+                gen.writeStartObject();
+                {
+                    gen.writeStringField("type", value.getTypeString());
+                    switch (value.getType()) {
+                        case ProductData.TYPE_ASCII:
+                            gen.writeObjectField("elems", value.toString());
+                            break;
+                        case ProductData.TYPE_INT8:
+                        case ProductData.TYPE_UINT8:
+                            gen.writeBinaryField("elems", (byte[]) value.getElems());
+                            break;
+                        default:
+                            gen.writeObjectField("elems", value.getElems());
+                            break;
+                    }
+                }
+                gen.writeEndObject();
+            }
+        });
+        metadataModule.addDeserializer(ProductData.class, new StdDeserializer<ProductData>(ProductData.class) {
+            @Override
+            public ProductData deserialize(JsonParser parser, DeserializationContext ctxt) throws IOException, JsonProcessingException {
+                ObjectCodec codec = parser.getCodec();
+                JsonNode node = codec.readTree(parser);
+
+                final int type = ProductData.getType(node.get("type").asText());
+                final Object o;
+                switch (type) {
+                    case ProductData.TYPE_ASCII:
+                        o = node.get("elems").asText();
+                        break;
+                    case ProductData.TYPE_INT8:
+                    case ProductData.TYPE_UINT8:
+                        o = node.get("elems").binaryValue();
+                        break;
+                    case ProductData.TYPE_INT16:
+                    case ProductData.TYPE_UINT16:
+                        o = codec.readValue(node.get("elems").traverse(codec), short[].class);
+                        break;
+                    case ProductData.TYPE_INT32:
+                    case ProductData.TYPE_UINT32:
+                    case ProductData.TYPE_UTC:
+                        o = codec.readValue(node.get("elems").traverse(codec), int[].class);
+                        break;
+                    case ProductData.TYPE_INT64:
+                        o = codec.readValue(node.get("elems").traverse(codec), long[].class);
+                        break;
+                    case ProductData.TYPE_FLOAT32:
+                        o = codec.readValue(node.get("elems").traverse(codec), float[].class);
+                        break;
+                    case ProductData.TYPE_FLOAT64:
+                        o = codec.readValue(node.get("elems").traverse(codec), double[].class);
+                        break;
+                    default:
+                        o = null;
+                }
+                return ProductData.createInstance(type, o);
+            }
+        });
+    }
+
+    public static MetadataElement[] jsonToMetadata(String jsonMetadataString) throws JsonProcessingException {
+        final ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(metadataModule);
+        return objectMapper.readValue(jsonMetadataString, MetadataElement[].class);
+    }
+
+    public static String metadataToJson(MetadataElement[] metadata) throws JsonProcessingException {
+        final ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(metadataModule);
+//        return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(metadata);
+        return objectMapper.writeValueAsString(metadata);
+    }
+
+    private static void writeNonEmptyStringField(JsonGenerator gen, String fieldName, String string) throws IOException {
+        if (string != null && string.trim().length() > 0) {
+            gen.writeStringField(fieldName, string.trim());
         }
     }
 }

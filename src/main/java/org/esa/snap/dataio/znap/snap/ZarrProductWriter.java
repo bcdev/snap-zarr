@@ -2,7 +2,13 @@ package org.esa.snap.dataio.znap.snap;
 
 import com.bc.ceres.core.ProgressMonitor;
 import com.bc.ceres.glevel.MultiLevelImage;
-import com.bc.zarr.*;
+import com.bc.zarr.ArrayParams;
+import com.bc.zarr.Compressor;
+import com.bc.zarr.CompressorFactory;
+import com.bc.zarr.DataType;
+import com.bc.zarr.ZarrArray;
+import com.bc.zarr.ZarrGroup;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.esa.snap.core.dataio.AbstractProductWriter;
 import org.esa.snap.core.dataio.ProductIO;
 import org.esa.snap.core.dataio.ProductWriter;
@@ -10,25 +16,95 @@ import org.esa.snap.core.dataio.ProductWriterPlugIn;
 import org.esa.snap.core.dataio.dimap.DimapProductConstants;
 import org.esa.snap.core.dataio.geocoding.ComponentGeoCoding;
 import org.esa.snap.core.dataio.geocoding.GeoRaster;
-import org.esa.snap.core.datamodel.*;
+import org.esa.snap.core.dataio.geometry.VectorDataNodeIO;
+import org.esa.snap.core.dataio.geometry.WriterBasedVectorDataNodeWriter;
+import org.esa.snap.core.datamodel.Band;
+import org.esa.snap.core.datamodel.CrsGeoCoding;
+import org.esa.snap.core.datamodel.GeoCoding;
+import org.esa.snap.core.datamodel.MetadataAttribute;
+import org.esa.snap.core.datamodel.MetadataElement;
+import org.esa.snap.core.datamodel.Product;
+import org.esa.snap.core.datamodel.ProductData;
+import org.esa.snap.core.datamodel.ProductNode;
+import org.esa.snap.core.datamodel.ProductNodeGroup;
+import org.esa.snap.core.datamodel.RasterDataNode;
+import org.esa.snap.core.datamodel.SampleCoding;
+import org.esa.snap.core.datamodel.TiePointGeoCoding;
+import org.esa.snap.core.datamodel.TiePointGrid;
+import org.esa.snap.core.datamodel.VectorDataNode;
+import org.esa.snap.core.datamodel.VirtualBand;
+import org.esa.snap.core.util.SystemUtils;
 import org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants;
 import org.esa.snap.runtime.Config;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import ucar.ma2.InvalidRangeException;
 
 import java.awt.geom.AffineTransform;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.prefs.Preferences;
+import java.util.stream.Collectors;
 
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.*;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_FORWARD_CODING_KEY;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_GEO_CHECKS;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_GEO_CRS;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_INVERSE_CODING_KEY;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_LAT_VARIABLE_NAME;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_LON_VARIABLE_NAME;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_OFFSET_X;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_OFFSET_Y;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_RASTER_RESOLUTION_KM;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_SUBSAMPLING_X;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_SUBSAMPLING_Y;
 import static org.esa.snap.core.util.StringUtils.isNotNullAndNotEmpty;
 import static org.esa.snap.core.util.SystemUtils.LOG;
-import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
+import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MASKS;
+import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MEANINGS;
+import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_VALUES;
+import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.tryFindUnitString;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_BINARY_FORMAT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING_SHARED;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING_TYPE;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_X;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_Y;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_DESC;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_METADATA;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_NAME;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_HEIGHT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_WIDTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_TYPE;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_X;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_Y;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.BANDWIDTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.BANDWIDTH_UNIT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DATASET_AUTO_GROUPING;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DISCONTINUITY;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.FLAG_DESCRIPTIONS;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_HEIGHT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_WIDTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_X;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_Y;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NO_DATA_VALUE_USED;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.QUICKLOOK_BAND_NAME;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SOLAR_FLUX;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SPECTRAL_BAND_INDEX;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.UNIT_EXTENSION;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VALID_PIXEL_EXPRESSION;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VIRTUAL_BAND_EXPRESSION;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.WAVELENGTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.WAVELENGTH_UNIT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.convertToPath;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.getSnapDataType;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.metadataToJson;
 import static ucar.nc2.constants.ACDD.TIME_END;
 import static ucar.nc2.constants.ACDD.TIME_START;
 import static ucar.nc2.constants.CDM.FILL_VALUE;
@@ -51,7 +127,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
     public ZarrProductWriter(final ZarrProductWriterPlugIn productWriterPlugIn) {
         super(productWriterPlugIn);
-        compressor = CompressorFactory.create(getCompressorId(), getCompressionLevel());
+        compressor = CompressorFactory.create(getCompressorId(), "level", getCompressionLevel());
         binaryWriterPlugIn = getBinaryWriterPlugin(productWriterPlugIn);
     }
 
@@ -69,11 +145,11 @@ public class ZarrProductWriter extends AbstractProductWriter {
     }
 
     @Override
-    public void flush() throws IOException {
+    public void flush() {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         for (BinaryWriter value : zarrWriters.values()) {
             value.dispose();
         }
@@ -81,7 +157,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
     }
 
     @Override
-    public void deleteOutput() throws IOException {
+    public void deleteOutput() {
         throw new RuntimeException("not implemented");
     }
 
@@ -91,6 +167,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
         final Product product = getSourceProduct();
         sharedGeoCodings = collectSharedGeoCodings(product);
         zarrGroup = ZarrGroup.create(outputRoot, collectProductAttributes());
+        writeVectorData();
         for (TiePointGrid tiePointGrid : product.getTiePointGrids()) {
             writeTiePointGrid(tiePointGrid);
         }
@@ -99,6 +176,37 @@ public class ZarrProductWriter extends AbstractProductWriter {
             if (shouldWrite(band)) {
                 initializeZarrBandWriter(band);
             }
+        }
+    }
+    private void writeVectorData() throws IOException {
+        Product product = getSourceProduct();
+        ProductNodeGroup<VectorDataNode> vectorDataGroup = product.getVectorDataGroup();
+        final Path vectorDataDir = outputRoot.resolve(".vector_data");
+        if (Files.isDirectory(vectorDataDir)) {
+            final List<Path> collect = Files.list(vectorDataDir).collect(Collectors.toList());
+            for (Path path : collect) {
+                Files.delete(path);
+            }
+        }
+
+        if (vectorDataGroup.getNodeCount() > 0) {
+            Files.createDirectories(vectorDataDir);
+            for (int i = 0; i < vectorDataGroup.getNodeCount(); i++) {
+                VectorDataNode vectorDataNode = vectorDataGroup.get(i);
+                writeVectorData(vectorDataDir, vectorDataNode);
+            }
+        }
+    }
+
+    void writeVectorData(Path vectorDataDir, VectorDataNode vectorDataNode) {
+        try {
+            WriterBasedVectorDataNodeWriter vectorDataNodeWriter = new WriterBasedVectorDataNodeWriter();
+            final Path filePath = vectorDataDir.resolve(vectorDataNode.getName() + VectorDataNodeIO.FILENAME_EXTENSION);
+            try (final BufferedWriter writer = Files.newBufferedWriter(filePath)) {
+                vectorDataNodeWriter.write(vectorDataNode, writer);
+            }
+        } catch (IOException e) {
+            SystemUtils.LOG.throwing("DimapProductWriter", "writeVectorData", e);
         }
     }
 
@@ -141,31 +249,45 @@ public class ZarrProductWriter extends AbstractProductWriter {
     }
 
     Map<String, Object> collectProductAttributes() {
-        final Product product = getSourceProduct();
-        final Map<String, Object> productAttributes = new HashMap<>();
-        productAttributes.put(ATT_NAME_PRODUCT_NAME, product.getName());
-        productAttributes.put(ATT_NAME_PRODUCT_TYPE, product.getProductType());
-        productAttributes.put(ATT_NAME_PRODUCT_DESC, product.getDescription());
-        productAttributes.put(ATT_NAME_PRODUCT_SCENE_WIDTH, product.getSceneRasterWidth());
-        productAttributes.put(ATT_NAME_PRODUCT_SCENE_HEIGHT, product.getSceneRasterHeight());
-        addTimeAttribute(productAttributes, TIME_START, product.getStartTime()); // "time_coverage_start"
-        addTimeAttribute(productAttributes, TIME_END, product.getEndTime()); // "time_coverage_end"
+        final Map<String, Object> attributes = new HashMap<>();
+        collectGeneralProductAttrs(attributes);
+        collectProductGeoCodingAttrs(attributes);
+        // flag attributes collected per Band (Flag or Index Band). see collectSampleCodingAttributes()
+        return attributes;
+    }
 
-        final boolean prettyPrinting = false;
-        final String metadataNotPrettyPrint = ZarrUtils.toJson(product.getMetadataRoot().getElements(), prettyPrinting);
-        productAttributes.put(ATT_NAME_PRODUCT_METADATA, metadataNotPrettyPrint);
+    private void collectProductGeoCodingAttrs(Map<String, Object> attrs) {
+        final GeoCoding gc = getSourceProduct().getSceneGeoCoding();
+        if (gc != null) {
+            attrs.put(ATT_NAME_GEOCODING, getGeoCodingAttributes(gc));
+        }
+    }
+
+    private void collectGeneralProductAttrs(Map<String, Object> attrs) {
+        final Product product = getSourceProduct();
+        attrs.put(ATT_NAME_PRODUCT_NAME, product.getName());
+        attrs.put(ATT_NAME_PRODUCT_TYPE, product.getProductType());
+        attrs.put(ATT_NAME_PRODUCT_DESC, product.getDescription());
+        attrs.put(ATT_NAME_PRODUCT_SCENE_WIDTH, product.getSceneRasterWidth());
+        attrs.put(ATT_NAME_PRODUCT_SCENE_HEIGHT, product.getSceneRasterHeight());
+        addTimeAttribute(attrs, TIME_START, product.getStartTime()); // "time_coverage_start"
+        addTimeAttribute(attrs, TIME_END, product.getEndTime()); // "time_coverage_end"
+
+        try {
+            final MetadataElement[] metadataElements = product.getMetadataRoot().getElements();
+            final String metadataNotPrettyPrint = metadataToJson(metadataElements);
+            attrs.put(ATT_NAME_PRODUCT_METADATA, metadataNotPrettyPrint);
+        } catch (JsonProcessingException e) {
+            // TODO: 17.02.2021 SE -- Turn this into correct exception handing.
+            e.printStackTrace();
+        }
 
         if (product.getAutoGrouping() != null) {
-            productAttributes.put(DATASET_AUTO_GROUPING, product.getAutoGrouping().toString());
+            attrs.put(DATASET_AUTO_GROUPING, product.getAutoGrouping().toString());
         }
         if (isNotNullAndNotEmpty(product.getQuicklookBandName())) {
-            productAttributes.put(QUICKLOOK_BAND_NAME, product.getQuicklookBandName());
+            attrs.put(QUICKLOOK_BAND_NAME, product.getQuicklookBandName());
         }
-        final GeoCoding gc = product.getSceneGeoCoding();
-        if (gc != null) {
-            productAttributes.put(ATT_NAME_GEOCODING, getGeoCodingAttributes(gc));
-        }
-        return productAttributes;
     }
 
     HashMap<String, Object> getGeoCodingAttributes(GeoCoding gc) {

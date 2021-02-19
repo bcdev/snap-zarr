@@ -1,0 +1,96 @@
+Tag <Spectral_Band_Info> from BEAM-DIMAP
+
+// .zarray
+    BAND_NAME
+        .getName()
+    DATA_TYPE
+        ProductData.getTypeString(band.getDataType())
+    BAND_RASTER_WIDTH
+        .getRasterWidth()
+    BAND_RASTER_HEIGHT
+        .getRasterHeight()
+
+// collectRasterAttributes
+    BAND_DESCRIPTION         -->  long_name        (CFConstantsAndUtils.LONG_NAME)
+        .getDescription()
+    PHYSICAL_UNIT            -->  units            (CFConstantsAndUtils.UNITS)
+        final String unit = band.getUnit();
+        if (unit != null && unit.trim().length() > 0) { ... }
+    SCALING_FACTOR           -->  scale_factor     (CFConstantsAndUtils.SCALE_FACTOR)
+        .getScalingFactor()
+    SCALING_OFFSET           -->  add_offset       (CFConstantsAndUtils.ADD_OFFSET)
+        .getScalingOffset()
+
+    >>>>> NOT USED <<<<<
+                    LOG10_SCALED
+                        .isLog10Scaled()
+    >>>>> NOT USED <<<<<
+
+    NO_DATA_VALUE_USED       -->  no_data_value_used         ZnapConstantsAndUtils
+        .isNoDataValueUsed()
+    NO_DATA_VALUE            -->  _FillValue       (CFConstantsAndUtils.FILL_VALUE)
+        .getNoDataValue()
+    if (validPixelExpression != null) {
+        VALID_MASK_TERM      -->  valid_pixel_expression     ZnapConstantsAndUtils
+            .getValidPixelExpression()
+
+
+// collectBandAttributes
+    SOLAR_FLUX
+        .getSolarFlux()
+    SPECTRAL_BAND_INDEX
+        .getSpectralBandIndex()
+    BAND_WAVELEN
+        .getSpectralWavelength()
+    BANDWIDTH
+        .getSpectralBandwidth()
+    ZnapConstantsAndUtils.NAME_SAMPLE_CODING
+        .getSampleCoding().getName()
+    CFConstantsAndUtils.FLAG_MEANINGS
+        .getSampleCoding().getAttributes()[].getName()
+    CFConstantsAndUtils.FLAG_MASKS
+        .getSampleCoding().getAttributes()[].getData().getElemInt()
+    CFConstantsAndUtils.FLAG_VALUES
+        .getSampleCoding().getAttributes()[].getData()   .getElemInt() || .getElemIntAt(1)
+    ZnapConstantsAndUtils.FLAG_DESCRIPTIONS
+        .getSampleCoding().getAttributes()[].getDescription()
+
+    if (band instanceof VirtualBand) {
+        VIRTUAL_BAND    true                 --->  NOT USED
+        EXPRESSION      .getExpression()     --->  ZnapConstantsAndUtils.VIRTUAL_BAND_EXPRESSION
+    }
+
+
+
+///////////////////////////////////////////////////////////////////////
+//  TODO -- Implemented in BEAM-DIMAP but not in Zarr Reader/Writer  //
+///////////////////////////////////////////////////////////////////////
+
+    BAND_INDEX
+        ---> Nicht verwechseln mit spectral band index !
+
+
+    private void writeAncillaryInformation(RasterDataNode rasterDataNode, int indent) {
+        String[] ancillaryRelations = rasterDataNode.getAncillaryRelations();
+        for (String ancillaryRelation : ancillaryRelations) {
+            printLine(indent + 2, "ANCILLARY_RELATION", ancillaryRelation);
+        }
+        RasterDataNode[] ancillaryVariables = rasterDataNode.getAncillaryVariables();
+        for (RasterDataNode ancillaryVariable : ancillaryVariables) {
+            printLine(indent + 2, "ANCILLARY_VARIABLE", ancillaryVariable.getName());
+        }
+    }
+
+    private void writeImageToModelTransform(RasterDataNode rasterDataNode, int indent) {
+        final AffineTransform imageToModelTransform = rasterDataNode.getImageToModelTransform();
+        if (!imageToModelTransform.isIdentity()) {
+            final double[] matrix = new double[6];
+            imageToModelTransform.getMatrix(matrix);
+            printLine(indent + 2, "IMAGE_TO_MODEL_TRANSFORM", StringUtils.arrayToCsv(matrix));
+        }
+    }
+
+
+
+
+</Spectral_Band_Info>

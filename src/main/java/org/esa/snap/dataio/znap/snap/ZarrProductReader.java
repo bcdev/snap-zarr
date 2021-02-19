@@ -4,20 +4,45 @@ import com.bc.ceres.core.ProgressMonitor;
 import com.bc.zarr.DataType;
 import com.bc.zarr.ZarrArray;
 import com.bc.zarr.ZarrGroup;
-import com.bc.zarr.ZarrUtils;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import org.esa.snap.core.dataio.AbstractProductReader;
 import org.esa.snap.core.dataio.ProductIO;
 import org.esa.snap.core.dataio.ProductReader;
 import org.esa.snap.core.dataio.ProductReaderPlugIn;
 import org.esa.snap.core.dataio.dimap.DimapProductConstants;
-import org.esa.snap.core.dataio.geocoding.*;
-import org.esa.snap.core.datamodel.*;
+import org.esa.snap.core.dataio.geocoding.ComponentFactory;
+import org.esa.snap.core.dataio.geocoding.ComponentGeoCoding;
+import org.esa.snap.core.dataio.geocoding.ForwardCoding;
+import org.esa.snap.core.dataio.geocoding.GeoChecks;
+import org.esa.snap.core.dataio.geocoding.GeoRaster;
+import org.esa.snap.core.dataio.geocoding.InverseCoding;
+import org.esa.snap.core.dataio.geometry.VectorDataNodeIO;
+import org.esa.snap.core.dataio.geometry.VectorDataNodeReader;
+import org.esa.snap.core.datamodel.Band;
+import org.esa.snap.core.datamodel.CrsGeoCoding;
+import org.esa.snap.core.datamodel.DataNode;
+import org.esa.snap.core.datamodel.FlagCoding;
+import org.esa.snap.core.datamodel.GeoCoding;
+import org.esa.snap.core.datamodel.GeometryDescriptor;
+import org.esa.snap.core.datamodel.IndexCoding;
+import org.esa.snap.core.datamodel.MetadataElement;
+import org.esa.snap.core.datamodel.PlacemarkDescriptor;
+import org.esa.snap.core.datamodel.PlacemarkDescriptorRegistry;
+import org.esa.snap.core.datamodel.Product;
+import org.esa.snap.core.datamodel.ProductData;
+import org.esa.snap.core.datamodel.ProductNode;
+import org.esa.snap.core.datamodel.ProductNodeGroup;
+import org.esa.snap.core.datamodel.RasterDataNode;
+import org.esa.snap.core.datamodel.TiePointGeoCoding;
+import org.esa.snap.core.datamodel.TiePointGrid;
+import org.esa.snap.core.datamodel.VectorDataNode;
+import org.esa.snap.core.datamodel.VirtualBand;
 import org.esa.snap.core.image.ResolutionLevel;
 import org.esa.snap.core.util.Debug;
+import org.esa.snap.core.util.FeatureUtils;
+import org.esa.snap.core.util.SystemUtils;
 import org.geotools.referencing.CRS;
 import org.geotools.referencing.factory.ReferencingObjectFactory;
+import org.opengis.feature.simple.SimpleFeatureType;
 import org.opengis.referencing.FactoryException;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import org.opengis.referencing.operation.TransformException;
@@ -27,19 +52,66 @@ import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.StringReader;
+import java.io.Reader;
 import java.io.StringWriter;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.ParseException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Level;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.*;
-import static org.esa.snap.core.util.Guardian.*;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_FORWARD_CODING_KEY;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_GEO_CHECKS;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_GEO_CRS;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_INVERSE_CODING_KEY;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_LAT_VARIABLE_NAME;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_LON_VARIABLE_NAME;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_OFFSET_X;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_OFFSET_Y;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_RASTER_RESOLUTION_KM;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_SUBSAMPLING_X;
+import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_SUBSAMPLING_Y;
+import static org.esa.snap.core.util.Guardian.assertEquals;
+import static org.esa.snap.core.util.Guardian.assertNotNull;
+import static org.esa.snap.core.util.Guardian.assertNotNullOrEmpty;
 import static org.esa.snap.core.util.SystemUtils.LOG;
-import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
+import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MASKS;
+import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MEANINGS;
+import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_VALUES;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_BINARY_FORMAT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING_SHARED;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_X;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_Y;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_DESC;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_METADATA;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_NAME;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_HEIGHT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_WIDTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_TYPE;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_X;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_Y;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.BANDWIDTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DATASET_AUTO_GROUPING;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DISCONTINUITY;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.FLAG_DESCRIPTIONS;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NAME_SAMPLE_CODING;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NO_DATA_VALUE_USED;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.QUICKLOOK_BAND_NAME;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SOLAR_FLUX;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SPECTRAL_BAND_INDEX;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VALID_PIXEL_EXPRESSION;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VIRTUAL_BAND_EXPRESSION;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.WAVELENGTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.convertToPath;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.getSnapDataType;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.jsonToMetadata;
 import static ucar.nc2.constants.ACDD.TIME_END;
 import static ucar.nc2.constants.ACDD.TIME_START;
 import static ucar.nc2.constants.CDM.FILL_VALUE;
@@ -54,15 +126,15 @@ public class ZarrProductReader extends AbstractProductReader {
     private ProductReaderPlugIn binaryReaderPlugIn;
     private String binaryFileExtension;
     private HashMap<DataNode, Product> binaryProducts;
-    private Map<ProductNode, Map<String, Object>> nodeAttributes = new HashMap<>();
-    private Map<Map, GeoCoding> sharedGeoCodings = new HashMap<>();
+    private final Map<ProductNode, Map<String, Object>> nodeAttributes = new HashMap<>();
+    private final Map<Map<String, Object>, GeoCoding> sharedGeoCodings = new HashMap<>();
 
     protected ZarrProductReader(ProductReaderPlugIn readerPlugIn) {
         super(readerPlugIn);
     }
 
     @Override
-    public void readBandRasterData(Band destBand, int destOffsetX, int destOffsetY, int destWidth, int destHeight, ProductData destBuffer, ProgressMonitor pm) throws IOException {
+    public void readBandRasterData(Band destBand, int destOffsetX, int destOffsetY, int destWidth, int destHeight, ProductData destBuffer, ProgressMonitor pm) {
         throw new IllegalStateException("Data is provided by images");
     }
 
@@ -80,7 +152,6 @@ public class ZarrProductReader extends AbstractProductReader {
 
     @Override
     protected Product readProductNodesImpl() throws IOException {
-        // TODO: 23.07.2019 SE -- Frage 1 siehe Trello https://trello.com/c/HMw8CxqL/4-fragen-an-norman
         final Path rootPath = convertToPath(getInput());
         final ZarrGroup rootGroup = ZarrGroup.open(rootPath);
         final Map<String, Object> productAttributes = rootGroup.getAttributes();
@@ -91,9 +162,10 @@ public class ZarrProductReader extends AbstractProductReader {
         final ProductData.UTC sensingStart = getTime(productAttributes, TIME_START, rootPath); // "time_coverage_start"
         final ProductData.UTC sensingStop = getTime(productAttributes, TIME_END, rootPath); // "time_coverage_end"
         final String product_metadata = (String) productAttributes.get(ATT_NAME_PRODUCT_METADATA);
-        final ArrayList<MetadataElement> metadataElements = toMetadataElements(product_metadata);
-        final int sceneRasterWidth = ((Double) productAttributes.get(ATT_NAME_PRODUCT_SCENE_WIDTH)).intValue();
-        final int sceneRasterHeight = ((Double) productAttributes.get(ATT_NAME_PRODUCT_SCENE_HEIGHT)).intValue();
+//        final ArrayList<MetadataElement> metadataElements = toMetadataElements(product_metadata);
+        final MetadataElement[] metadataElements = jsonToMetadata(product_metadata);
+        final int sceneRasterWidth = ((Number) productAttributes.get(ATT_NAME_PRODUCT_SCENE_WIDTH)).intValue();
+        final int sceneRasterHeight = ((Number) productAttributes.get(ATT_NAME_PRODUCT_SCENE_HEIGHT)).intValue();
         final Product product = new Product(productName, productType, sceneRasterWidth, sceneRasterHeight, this);
         product.setDescription(productDesc);
         product.setStartTime(sensingStart);
@@ -130,7 +202,7 @@ public class ZarrProductReader extends AbstractProductReader {
                 final double subSamplingX = (double) attributes.get(ATT_NAME_SUBSAMPLING_X);
                 final double subSamplingY = (double) attributes.get(ATT_NAME_SUBSAMPLING_Y);
                 final float[] dataBuffer = new float[width * height];
-                if (attributes != null && attributes.containsKey(ATT_NAME_BINARY_FORMAT)) {
+                if (attributes.containsKey(ATT_NAME_BINARY_FORMAT)) {
                     initBinaryReaderPlugin(attributes);
                     final Path srcPath = rootPath.resolve(rasterName).resolve(rasterName + binaryFileExtension);
                     final ProductReader reader = binaryReaderPlugIn.createReaderInstance();
@@ -168,7 +240,7 @@ public class ZarrProductReader extends AbstractProductReader {
                 if (virtualBand) {
                     continue;
                 }
-                if (attributes != null && attributes.containsKey(ATT_NAME_BINARY_FORMAT)) {
+                if (attributes.containsKey(ATT_NAME_BINARY_FORMAT)) {
                     initBinaryReaderPlugin(attributes);
                     final Path srcPath = rootPath.resolve(rasterName).resolve(rasterName + binaryFileExtension);
                     final ProductReader reader = binaryReaderPlugIn.createReaderInstance();
@@ -186,7 +258,55 @@ public class ZarrProductReader extends AbstractProductReader {
         product.setProductReader(this);
         product.setModified(false);
         addGeocodings(productAttributes, product);
+        readVectorData(product);
         return product;
+    }
+
+    private void readVectorData(final Product product) {
+        final Path rootPath = convertToPath(getInput());
+        final Path vectorDataDir = rootPath.resolve(".vector_data");
+        if (Files.isDirectory(vectorDataDir)) {
+            try {
+                final List<Path> paths = Files.list(vectorDataDir).collect(Collectors.toList());
+                for (Path path : paths) {
+                    addVectorDataToProduct(path, product);
+                }
+            } catch (IOException e) {
+            }
+        }
+    }
+
+    private void addVectorDataToProduct(Path vectorFilePath, final Product product) {
+        final CoordinateReferenceSystem sceneCRS = product.getSceneCRS();
+        try (Reader reader = Files.newBufferedReader(vectorFilePath)) {
+            FeatureUtils.FeatureCrsProvider crsProvider = new FeatureUtils.FeatureCrsProvider() {
+                @Override
+                public CoordinateReferenceSystem getFeatureCrs(Product product) {
+                    return sceneCRS;
+                }
+
+                @Override
+                public boolean clipToProductBounds() {
+                    return false;
+                }
+            };
+            OptimalPlacemarkDescriptorProvider descriptorProvider = new OptimalPlacemarkDescriptorProvider();
+            final String name = vectorFilePath.getFileName().toString();
+            VectorDataNode vectorDataNode = VectorDataNodeReader.read(name, reader, product,
+                                                                      crsProvider, descriptorProvider, sceneCRS,
+                                                                      VectorDataNodeIO.DEFAULT_DELIMITER_CHAR,
+                                                                      ProgressMonitor.NULL);
+            if (vectorDataNode != null) {
+                final ProductNodeGroup<VectorDataNode> vectorDataGroup = product.getVectorDataGroup();
+                final VectorDataNode existing = vectorDataGroup.get(vectorDataNode.getName());
+                if (existing != null) {
+                    vectorDataGroup.remove(existing);
+                }
+                vectorDataGroup.add(vectorDataNode);
+            }
+        } catch (IOException e) {
+            SystemUtils.LOG.log(Level.SEVERE, "Error reading '" + vectorFilePath + "'", e);
+        }
     }
 
     private void addGeocodings(Map<String, Object> productAttributes, Product product) throws IOException {
@@ -194,7 +314,9 @@ public class ZarrProductReader extends AbstractProductReader {
         final List<RasterDataNode> rasterDataNodes = product.getRasterDataNodes();
         for (RasterDataNode rasterDataNode : rasterDataNodes) {
             final Map<String, Object> attibutes = nodeAttributes.get(rasterDataNode);
-            addGeoCoding(rasterDataNode, attibutes, rasterDataNode::setGeoCoding);
+            if (attibutes != null) {
+                addGeoCoding(rasterDataNode, attibutes, rasterDataNode::setGeoCoding);
+            }
         }
     }
 
@@ -303,9 +425,9 @@ public class ZarrProductReader extends AbstractProductReader {
                     final int rasterWidth = lonRaster.getRasterWidth();
                     final int rasterHeight = lonRaster.getRasterHeight();
                     final int size = rasterWidth * rasterHeight;
-                    final double[] longitudes = lonRaster.getSourceImage().getImage(0).getData()
+                    final double[] longitudes = lonRaster.getGeophysicalImage().getImage(0).getData()
                             .getPixels(0, 0, rasterWidth, rasterHeight, new double[size]);
-                    final double[] latitudes = latRaster.getSourceImage().getImage(0).getData()
+                    final double[] latitudes = latRaster.getGeophysicalImage().getImage(0).getData()
                             .getPixels(0, 0, rasterWidth, rasterHeight, new double[size]);
                     geoRaster = new GeoRaster(longitudes, latitudes, lonVarName, latVarName, rasterWidth, rasterHeight,
                                               resolution);
@@ -413,7 +535,7 @@ public class ZarrProductReader extends AbstractProductReader {
     protected void readBandRasterDataImpl(
             int sourceOffsetX, int sourceOffsetY, int sourceWidth, int sourceHeight, int sourceStepX, int sourceStepY,
             Band destBand, int destOffsetX, int destOffsetY, int destWidth, int destHeight,
-            ProductData destBuffer, ProgressMonitor pm) throws IOException {
+            ProductData destBuffer, ProgressMonitor pm) {
         throw new IllegalStateException("Data is provided by images");
     }
 
@@ -475,7 +597,7 @@ public class ZarrProductReader extends AbstractProductReader {
         final List<String> flagMeanings = (List) attributes.get(FLAG_MEANINGS);
         if (flagMeanings != null) {
 
-            final List<Double> flagMasks = (List<Double>) attributes.get(FLAG_MASKS);
+            final List<Number> flagMasks = (List<Number>) attributes.get(FLAG_MASKS);
             final List<Double> flagValues = (List<Double>) attributes.get(FLAG_VALUES);
 
             FlagCoding flagCoding = null;
@@ -532,84 +654,6 @@ public class ZarrProductReader extends AbstractProductReader {
         return sampleCodingName;
     }
 
-    private static ArrayList<MetadataElement> toMetadataElements(String product_metadata_str) {
-        List<Map<String, Object>> product_metadata = ZarrUtils.fromJson(new StringReader(product_metadata_str), List.class);
-        final ArrayList<MetadataElement> snapElements = new ArrayList<>();
-        for (Map<String, Object> jsonElement : product_metadata) {
-            final MetadataElementGson element = toGsonMetadataElement(jsonElement);
-            final MetadataElement snapElement = new MetadataElement(element.name);
-            snapElement.setDescription(element.description);
-            addAttributes(snapElement, element.attributes);
-            addElements(snapElement, element.elements);
-            snapElements.add(snapElement);
-        }
-        return snapElements;
-    }
-
-    private static void addElements(MetadataElement parentElement, ProductNodeGroupGson<MetadataElementGson> elements) {
-        if (elements != null) {
-            for (MetadataElementGson node : elements.nodeList.nodes) {
-                final MetadataElement childElement = new MetadataElement(node.name);
-                childElement.setDescription(node.description);
-                addAttributes(childElement, node.attributes);
-                addElements(childElement, node.elements);
-                parentElement.addElement(childElement);
-            }
-        }
-    }
-
-    private static void addAttributes(MetadataElement snapElement, ProductNodeGroupGson<MetadataAttributeGson> attributes) {
-        if (attributes != null) {
-            for (MetadataAttributeGson node : attributes.nodeList.nodes) {
-                final MetadataAttribute attribute;
-                if (node.dataType == ProductData.TYPE_ASCII) {
-                    attribute = new MetadataAttribute(node.name, node.dataType);
-                } else {
-                    attribute = new MetadataAttribute(node.name, node.dataType, node.numElems);
-                }
-                attribute.setDescription(node.description);
-                attribute.setReadOnly(node.readOnly);
-                attribute.setSynthetic(node.synthetic);
-                attribute.setUnit(node.unit);
-                final List<Double> data = (List<Double>) node.data._array;
-                int dataSize = data.size();
-                if (ProductData.TYPE_ASCII == node.dataType) {
-                    if (dataSize > 0) {
-                        final byte[] bytes = new byte[dataSize];
-                        for (int i = 0; i < dataSize; i++) {
-                            Double c = data.get(i);
-                            bytes[i] = c.byteValue();
-                        }
-                        attribute.getData().setElems(bytes);
-                    }
-                } else {
-                    for (int i = 0; i < dataSize; i++) {
-                        Object o = data.get(i);
-                        Double v = null;
-                        if (o instanceof String) {
-                            v = Double.parseDouble((String) o);
-                        } else {
-                            v = (Double) o;
-                        }
-                        attribute.getData().setElemDoubleAt(i, v);
-                    }
-                }
-                if (node.dataType == ProductData.TYPE_UINT32 && node.numElems == 3 && "utc".equalsIgnoreCase(node.unit)) {
-                    final ProductData pd = attribute.getData();
-                    attribute.setData(new ProductData.UTC(pd.getElemIntAt(0), pd.getElemIntAt(1), pd.getElemIntAt(2)));
-                }
-                snapElement.addAttribute(attribute);
-            }
-        }
-    }
-
-    private static MetadataElementGson toGsonMetadataElement(Map<String, Object> jsonElement) {
-        final Gson gson = new GsonBuilder().create();
-        final String str = gson.toJson(jsonElement);
-        final StringReader reader = new StringReader(str);
-        return gson.fromJson(reader, MetadataElementGson.class);
-    }
-
     private ProductData.UTC getTime(Map<String, Object> productAttributes, String attributeName, Path rootPath) throws IOException {
         if (!productAttributes.containsKey(attributeName)) {
             return null;
@@ -620,46 +664,6 @@ public class ZarrProductReader extends AbstractProductReader {
         } catch (ParseException e) {
             throw new IOException("Unparseable " + attributeName + " while reading product '" + rootPath.toString() + "'", e);
         }
-    }
-
-    private static class ProductDataGson {
-
-        protected Object _array;
-        protected int _type;
-    }
-
-    private static class ProductNodeGson {
-
-        protected String name;
-        protected String description;
-    }
-
-    private static class MetadataAttributeGson extends ProductNodeGson {
-
-        protected int dataType;
-        protected int numElems;
-        protected ProductDataGson data;
-        protected boolean readOnly;
-        protected String unit;
-        protected boolean synthetic;
-    }
-
-    private static class ProductNodeListGson<T extends ProductNodeGson> {
-
-        protected List<T> nodes;
-        protected List<T> removedNodes;
-    }
-
-    private static class ProductNodeGroupGson<T extends ProductNodeGson> extends ProductNodeGson {
-
-        protected ProductNodeListGson<T> nodeList;
-        protected boolean takingOverNodeOwnership;
-    }
-
-    private static class MetadataElementGson extends ProductNodeGson {
-
-        protected ProductNodeGroupGson<MetadataElementGson> elements;
-        protected ProductNodeGroupGson<MetadataAttributeGson> attributes;
     }
 
     private static Number getNoDataValue(Map<String, Object> attributes) {
@@ -674,5 +678,31 @@ public class ZarrProductReader extends AbstractProductReader {
             return (Number) attribute;
         }
         return null;
+    }
+
+    private static class OptimalPlacemarkDescriptorProvider
+            implements VectorDataNodeReader.PlacemarkDescriptorProvider {
+
+        @Override
+        public PlacemarkDescriptor getPlacemarkDescriptor(SimpleFeatureType simpleFeatureType) {
+            PlacemarkDescriptorRegistry placemarkDescriptorRegistry = PlacemarkDescriptorRegistry.getInstance();
+            if (simpleFeatureType.getUserData().containsKey(
+                    PlacemarkDescriptorRegistry.PROPERTY_NAME_PLACEMARK_DESCRIPTOR)) {
+                String placemarkDescriptorClass = simpleFeatureType.getUserData().get(
+                        PlacemarkDescriptorRegistry.PROPERTY_NAME_PLACEMARK_DESCRIPTOR).toString();
+                PlacemarkDescriptor placemarkDescriptor = placemarkDescriptorRegistry.getPlacemarkDescriptor(
+                        placemarkDescriptorClass);
+                if (placemarkDescriptor != null) {
+                    return placemarkDescriptor;
+                }
+            }
+            final PlacemarkDescriptor placemarkDescriptor = placemarkDescriptorRegistry.getPlacemarkDescriptor(
+                    simpleFeatureType);
+            if (placemarkDescriptor != null) {
+                return placemarkDescriptor;
+            } else {
+                return placemarkDescriptorRegistry.getPlacemarkDescriptor(GeometryDescriptor.class);
+            }
+        }
     }
 }
