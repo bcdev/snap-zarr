@@ -72,6 +72,19 @@ final class ZnapConstantsAndUtils {
     public static final int LON_INDEX = 0;
     public static final int LAT_INDEX = 1;
 
+    public static final String IMAGE_INFO = "image_info";
+    public static final String STATISTICS = "statistics";
+    public static final String COLOR_PALETTE_POINTS = "color_palette_points";
+    public static final String COLOR_PALETTE_NUM_COLORS = "color_palette_num_colors";
+    public static final String COLOR_PALETTE_DISCRETE = "color_palette_discrete";
+    public static final String COLOR_PALETTE_AUTO_DISTRIBUTE = "color_palette_auto_dist";
+    public static final String SAMPLE = "sample";
+    public static final String LABEL = "label";
+    public static final String COLOR_RGBA = "color_rgba";
+    public static final String HISTOGRAM_MATCHING = "histogram_matching";
+    public static final String LOG_10_SCALED = "log_10_scaled";
+    public static final String NO_DATA_COLOR_RGBA = "no_data_color";
+
     // Product attributes
     public static final String DATASET_AUTO_GROUPING = "dataset_auto_grouping";
 

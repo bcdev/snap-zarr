@@ -18,11 +18,13 @@ import org.esa.snap.core.dataio.geocoding.InverseCoding;
 import org.esa.snap.core.dataio.geometry.VectorDataNodeIO;
 import org.esa.snap.core.dataio.geometry.VectorDataNodeReader;
 import org.esa.snap.core.datamodel.Band;
+import org.esa.snap.core.datamodel.ColorPaletteDef;
 import org.esa.snap.core.datamodel.CrsGeoCoding;
 import org.esa.snap.core.datamodel.DataNode;
 import org.esa.snap.core.datamodel.FlagCoding;
 import org.esa.snap.core.datamodel.GeoCoding;
 import org.esa.snap.core.datamodel.GeometryDescriptor;
+import org.esa.snap.core.datamodel.ImageInfo;
 import org.esa.snap.core.datamodel.IndexCoding;
 import org.esa.snap.core.datamodel.MetadataElement;
 import org.esa.snap.core.datamodel.PlacemarkDescriptor;
@@ -32,6 +34,8 @@ import org.esa.snap.core.datamodel.ProductData;
 import org.esa.snap.core.datamodel.ProductNode;
 import org.esa.snap.core.datamodel.ProductNodeGroup;
 import org.esa.snap.core.datamodel.RasterDataNode;
+import org.esa.snap.core.datamodel.Stx;
+import org.esa.snap.core.datamodel.StxFactory;
 import org.esa.snap.core.datamodel.TiePointGeoCoding;
 import org.esa.snap.core.datamodel.TiePointGrid;
 import org.esa.snap.core.datamodel.VectorDataNode;
@@ -39,6 +43,7 @@ import org.esa.snap.core.datamodel.VirtualBand;
 import org.esa.snap.core.image.ResolutionLevel;
 import org.esa.snap.core.util.Debug;
 import org.esa.snap.core.util.FeatureUtils;
+import org.esa.snap.core.util.StringUtils;
 import org.esa.snap.core.util.SystemUtils;
 import org.geotools.referencing.CRS;
 import org.geotools.referencing.factory.ReferencingObjectFactory;
@@ -57,6 +62,7 @@ import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.ParseException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -84,34 +90,7 @@ import static org.esa.snap.core.util.SystemUtils.LOG;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MASKS;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MEANINGS;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_VALUES;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_BINARY_FORMAT;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING_SHARED;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_X;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_Y;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_DESC;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_METADATA;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_NAME;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_HEIGHT;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_WIDTH;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_TYPE;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_X;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_Y;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.BANDWIDTH;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DATASET_AUTO_GROUPING;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DISCONTINUITY;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.FLAG_DESCRIPTIONS;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NAME_SAMPLE_CODING;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NO_DATA_VALUE_USED;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.QUICKLOOK_BAND_NAME;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SOLAR_FLUX;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SPECTRAL_BAND_INDEX;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VALID_PIXEL_EXPRESSION;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VIRTUAL_BAND_EXPRESSION;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.WAVELENGTH;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.convertToPath;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.getSnapDataType;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.jsonToMetadata;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
 import static ucar.nc2.constants.ACDD.TIME_END;
 import static ucar.nc2.constants.ACDD.TIME_START;
 import static ucar.nc2.constants.CDM.FILL_VALUE;
@@ -557,39 +536,99 @@ public class ZarrProductReader extends AbstractProductReader {
         applyRasterAttributes(attributes, band);
     }
 
-    static void applyRasterAttributes(Map<String, Object> attributes, RasterDataNode band) {
+    static void applyRasterAttributes(Map<String, Object> attributes, RasterDataNode rasterDataNode) {
         if (attributes.get(LONG_NAME) != null) {
-            band.setDescription((String) attributes.get(LONG_NAME));
+            rasterDataNode.setDescription((String) attributes.get(LONG_NAME));
         }
         if (attributes.get(UNITS) != null) {
-            band.setUnit((String) attributes.get(UNITS));
+            rasterDataNode.setUnit((String) attributes.get(UNITS));
         }
         if (attributes.get(SCALE_FACTOR) != null) {
-            band.setScalingFactor(((Number) attributes.get(SCALE_FACTOR)).doubleValue());
+            rasterDataNode.setScalingFactor(((Number) attributes.get(SCALE_FACTOR)).doubleValue());
         }
         if (attributes.get(ADD_OFFSET) != null) {
-            band.setScalingOffset(((Number) attributes.get(ADD_OFFSET)).doubleValue());
+            rasterDataNode.setScalingOffset(((Number) attributes.get(ADD_OFFSET)).doubleValue());
         }
         if (getNoDataValue(attributes) != null) {
-            band.setNoDataValue(getNoDataValue(attributes).doubleValue());
+            rasterDataNode.setNoDataValue(getNoDataValue(attributes).doubleValue());
         }
         if (attributes.get(NO_DATA_VALUE_USED) != null) {
-            band.setNoDataValueUsed((Boolean) attributes.get(NO_DATA_VALUE_USED));
+            rasterDataNode.setNoDataValueUsed((Boolean) attributes.get(NO_DATA_VALUE_USED));
         }
         if (attributes.get(VALID_PIXEL_EXPRESSION) != null) {
-            band.setValidPixelExpression((String) attributes.get(VALID_PIXEL_EXPRESSION));
+            rasterDataNode.setValidPixelExpression((String) attributes.get(VALID_PIXEL_EXPRESSION));
         }
         if (attributes.get(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM) != null) {
             final List matrix = (List) attributes.get(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM);
-            LOG.info("matrix for band '" + band.getName() + "' = " + Arrays.toString(matrix.toArray()));
+            LOG.info("matrix for band '" + rasterDataNode.getName() + "' = " + Arrays.toString(matrix.toArray()));
 
             final double[] ma = new double[matrix.size()];
             for (int i = 0; i < matrix.size(); i++) {
                 ma[i] = (double) matrix.get(i);
             }
             final AffineTransform i2m = new AffineTransform(ma);
-            band.setImageToModelTransform(i2m);
+            rasterDataNode.setImageToModelTransform(i2m);
         }
+        if (attributes.containsKey(STATISTICS)) {
+            final Map<String, Object> stxM = (Map<String, Object>) attributes.get(STATISTICS);
+            final double minSample = ((Number) stxM.get(DimapProductConstants.TAG_STX_MIN)).doubleValue();
+            final double maxSample = ((Number) stxM.get(DimapProductConstants.TAG_STX_MAX)).doubleValue();
+            final double meanSample = ((Number) stxM.get(DimapProductConstants.TAG_STX_MEAN)).doubleValue();
+            final double stdDev = ((Number) stxM.get(DimapProductConstants.TAG_STX_STDDEV)).doubleValue();
+            final boolean intHistogram = !ProductData.isFloatingPointType(rasterDataNode.getGeophysicalDataType());
+            final int[] bins = ((List<Integer>)stxM.get(DimapProductConstants.TAG_HISTOGRAM))
+                    .stream().mapToInt(Integer::intValue).toArray();
+            final int resLevel = ((Number) stxM.get(DimapProductConstants.TAG_STX_LEVEL)).intValue();
+            final Stx stx = new StxFactory()
+                    .withMinimum(minSample)
+                    .withMaximum(maxSample)
+                    .withMean(meanSample)
+                    .withStandardDeviation(stdDev)
+                    .withIntHistogram(intHistogram)
+                    .withHistogramBins(bins == null ? new int[0] : bins)
+                    .withResolutionLevel(resLevel).create();
+            rasterDataNode.setStx(stx);
+        }
+        if (attributes.containsKey(IMAGE_INFO)) {
+            final Map<String, Object> infoM = (Map<String, Object>) attributes.get(IMAGE_INFO);
+            final List<Map<String, Object>> pointsL = (List<Map<String, Object>>) infoM.get(COLOR_PALETTE_POINTS);
+            final ArrayList<ColorPaletteDef.Point> points = new ArrayList<>();
+            for (Map<String, Object> pointM : pointsL) {
+                final ColorPaletteDef.Point point = new ColorPaletteDef.Point();
+                if (pointM.containsKey(LABEL)) {
+                    String label = (String) pointM.get(LABEL);
+                    label = label != null? label.trim(): label;
+                    if (StringUtils.isNotNullAndNotEmpty(label)) {
+                        point.setLabel(label);
+                    }
+                }
+                point.setSample(((Number) pointM.get(SAMPLE)).doubleValue());
+                final int[] rgba = ((List<Integer>) pointM.get(COLOR_RGBA))
+                        .stream().mapToInt(Integer::intValue).toArray();
+                point.setColor(createColor(rgba));
+                points.add(point);
+            }
+
+            final ColorPaletteDef colorPaletteDef = new ColorPaletteDef(points.toArray(new ColorPaletteDef.Point[0]));
+            colorPaletteDef.setNumColors((int)infoM.get(COLOR_PALETTE_NUM_COLORS));
+            colorPaletteDef.setDiscrete((boolean) infoM.get(COLOR_PALETTE_DISCRETE));
+            colorPaletteDef.setAutoDistribute((boolean)infoM.get(COLOR_PALETTE_AUTO_DISTRIBUTE));
+            final ImageInfo imageInfo = new ImageInfo(colorPaletteDef);
+            if (infoM.containsKey(NO_DATA_COLOR_RGBA)) {
+                final int[] rgba = ((List<Integer>)infoM.get(NO_DATA_COLOR_RGBA))
+                        .stream().mapToInt(Integer::intValue).toArray();
+                imageInfo.setNoDataColor(createColor(rgba));
+            }
+            final String matching = (String) infoM.get(HISTOGRAM_MATCHING);
+            final ImageInfo.HistogramMatching histogramMatching = ImageInfo.HistogramMatching.valueOf(matching);
+            imageInfo.setHistogramMatching(histogramMatching);
+            imageInfo.setLogScaled((boolean) infoM.get(LOG_10_SCALED));
+            rasterDataNode.setImageInfo(imageInfo);
+        }
+    }
+
+    private static Color createColor(int[] rgba) {
+        return new Color(rgba[0], rgba[1], rgba[2], rgba[3]);
     }
 
     private static void applySampleCodings(Map<String, Object> attributes, Band band) {

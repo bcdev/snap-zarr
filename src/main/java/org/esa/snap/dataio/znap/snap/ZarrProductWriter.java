@@ -19,8 +19,10 @@ import org.esa.snap.core.dataio.geocoding.GeoRaster;
 import org.esa.snap.core.dataio.geometry.VectorDataNodeIO;
 import org.esa.snap.core.dataio.geometry.WriterBasedVectorDataNodeWriter;
 import org.esa.snap.core.datamodel.Band;
+import org.esa.snap.core.datamodel.ColorPaletteDef;
 import org.esa.snap.core.datamodel.CrsGeoCoding;
 import org.esa.snap.core.datamodel.GeoCoding;
+import org.esa.snap.core.datamodel.ImageInfo;
 import org.esa.snap.core.datamodel.MetadataAttribute;
 import org.esa.snap.core.datamodel.MetadataElement;
 import org.esa.snap.core.datamodel.Product;
@@ -29,16 +31,19 @@ import org.esa.snap.core.datamodel.ProductNode;
 import org.esa.snap.core.datamodel.ProductNodeGroup;
 import org.esa.snap.core.datamodel.RasterDataNode;
 import org.esa.snap.core.datamodel.SampleCoding;
+import org.esa.snap.core.datamodel.Stx;
 import org.esa.snap.core.datamodel.TiePointGeoCoding;
 import org.esa.snap.core.datamodel.TiePointGrid;
 import org.esa.snap.core.datamodel.VectorDataNode;
 import org.esa.snap.core.datamodel.VirtualBand;
+import org.esa.snap.core.util.StringUtils;
 import org.esa.snap.core.util.SystemUtils;
 import org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants;
 import org.esa.snap.runtime.Config;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import ucar.ma2.InvalidRangeException;
 
+import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -48,6 +53,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.prefs.Preferences;
@@ -70,41 +76,7 @@ import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MASKS;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MEANINGS;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_VALUES;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.tryFindUnitString;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_BINARY_FORMAT;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING_SHARED;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING_TYPE;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_X;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_Y;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_DESC;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_METADATA;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_NAME;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_HEIGHT;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_WIDTH;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_TYPE;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_X;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_Y;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.BANDWIDTH;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.BANDWIDTH_UNIT;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DATASET_AUTO_GROUPING;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DISCONTINUITY;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.FLAG_DESCRIPTIONS;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_HEIGHT;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_WIDTH;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_X;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_Y;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NO_DATA_VALUE_USED;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.QUICKLOOK_BAND_NAME;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SOLAR_FLUX;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SPECTRAL_BAND_INDEX;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.UNIT_EXTENSION;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VALID_PIXEL_EXPRESSION;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VIRTUAL_BAND_EXPRESSION;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.WAVELENGTH;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.WAVELENGTH_UNIT;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.convertToPath;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.getSnapDataType;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.metadataToJson;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
 import static ucar.nc2.constants.ACDD.TIME_END;
 import static ucar.nc2.constants.ACDD.TIME_START;
 import static ucar.nc2.constants.CDM.FILL_VALUE;
@@ -178,6 +150,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
             }
         }
     }
+
     private void writeVectorData() throws IOException {
         Product product = getSourceProduct();
         ProductNodeGroup<VectorDataNode> vectorDataGroup = product.getVectorDataGroup();
@@ -358,6 +331,56 @@ public class ZarrProductWriter extends AbstractProductWriter {
             attributes.put(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM, matrix);
 
         }
+        if (rdNode.isStxSet()) {
+            final LinkedHashMap<String, Object> stxM = new LinkedHashMap<>();
+            attributes.put(STATISTICS, stxM);
+            final Stx stx = rdNode.getStx();
+            stxM.put(DimapProductConstants.TAG_STX_MIN, stx.getMinimum());
+            stxM.put(DimapProductConstants.TAG_STX_MAX, stx.getMaximum());
+            stxM.put(DimapProductConstants.TAG_STX_MEAN, stx.getMean());
+            stxM.put(DimapProductConstants.TAG_STX_STDDEV, stx.getStandardDeviation());
+            stxM.put(DimapProductConstants.TAG_STX_LEVEL, stx.getResolutionLevel());
+            final int[] bins = stx.getHistogramBins();
+            if (bins != null && bins.length > 0) {
+                stxM.put(DimapProductConstants.TAG_HISTOGRAM, bins);
+            }
+        }
+
+        final ImageInfo imageInfo = rdNode.getImageInfo();
+        if (imageInfo != null) {
+            final LinkedHashMap<String, Object> infoM = new LinkedHashMap<>();
+
+            final ColorPaletteDef paletteDef = imageInfo.getColorPaletteDef();
+            final ArrayList<Map> pointsL = new ArrayList<>();
+            for (ColorPaletteDef.Point point : paletteDef.getPoints()) {
+                final LinkedHashMap<String, Object> pointM = new LinkedHashMap<>();
+                if (StringUtils.isNotNullAndNotEmpty(point.getLabel())) {
+                    pointM.put(LABEL, point.getLabel());
+                }
+                pointM.put(SAMPLE, point.getSample());
+                pointM.put(COLOR_RGBA, createColorObject(point.getColor()));
+                pointsL.add(pointM);
+            }
+            infoM.put(COLOR_PALETTE_POINTS, pointsL);
+            infoM.put(COLOR_PALETTE_NUM_COLORS, paletteDef.getNumColors());
+            infoM.put(COLOR_PALETTE_AUTO_DISTRIBUTE, paletteDef.isAutoDistribute());
+            infoM.put(COLOR_PALETTE_DISCRETE, paletteDef.isDiscrete());
+            final Color noDataColor = imageInfo.getNoDataColor();
+            if (noDataColor != null) {
+                infoM.put(NO_DATA_COLOR_RGBA, createColorObject(noDataColor));
+            }
+            infoM.put(HISTOGRAM_MATCHING, imageInfo.getHistogramMatching().toString());
+            infoM.put(LOG_10_SCALED, imageInfo.isLogScaled());
+            // TODO: 23.02.2021 SE -- ask Marco what about the following properties
+            // imageInfo.getUncertaintyBandName()
+            // imageInfo.getUncertaintyVisualisationMode()
+            // imageInfo.getRgbChannelDef()
+            attributes.put(IMAGE_INFO, infoM);
+        }
+    }
+
+    private static Object createColorObject(Color c) {
+        return new int[]{c.getRed(), c.getGreen(), c.getBlue(), c.getAlpha()};
     }
 
     static void collectBandAttributes(Band band, Map<String, Object> attributes) {
