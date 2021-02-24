@@ -84,6 +84,8 @@ final class ZnapConstantsAndUtils {
     public static final String HISTOGRAM_MATCHING = "histogram_matching";
     public static final String LOG_10_SCALED = "log_10_scaled";
     public static final String NO_DATA_COLOR_RGBA = "no_data_color";
+    public static final String UNCERTAINTY_BAND_NAME = "uncertainty_band_name";
+    public static final String UNCERTAINTY_VISUALISATION_MODE = "uncertainty_visualisation_mode";
 
     // Product attributes
     public static final String DATASET_AUTO_GROUPING = "dataset_auto_grouping";

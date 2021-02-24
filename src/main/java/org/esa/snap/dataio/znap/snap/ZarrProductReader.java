@@ -623,6 +623,15 @@ public class ZarrProductReader extends AbstractProductReader {
             final ImageInfo.HistogramMatching histogramMatching = ImageInfo.HistogramMatching.valueOf(matching);
             imageInfo.setHistogramMatching(histogramMatching);
             imageInfo.setLogScaled((boolean) infoM.get(LOG_10_SCALED));
+            if(infoM.containsKey(UNCERTAINTY_BAND_NAME)) {
+                imageInfo.setUncertaintyBandName((String) infoM.get(UNCERTAINTY_BAND_NAME));
+            }
+            if(infoM.containsKey(UNCERTAINTY_VISUALISATION_MODE)) {
+                final String modeName = (String) infoM.get(UNCERTAINTY_VISUALISATION_MODE);
+                final ImageInfo.UncertaintyVisualisationMode mode;
+                mode = ImageInfo.UncertaintyVisualisationMode.valueOf(modeName);
+                imageInfo.setUncertaintyVisualisationMode(mode);
+            }
             rasterDataNode.setImageInfo(imageInfo);
         }
     }

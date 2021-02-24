@@ -371,10 +371,13 @@ public class ZarrProductWriter extends AbstractProductWriter {
             }
             infoM.put(HISTOGRAM_MATCHING, imageInfo.getHistogramMatching().toString());
             infoM.put(LOG_10_SCALED, imageInfo.isLogScaled());
-            // TODO: 23.02.2021 SE -- ask Marco what about the following properties
-            // imageInfo.getUncertaintyBandName()
-            // imageInfo.getUncertaintyVisualisationMode()
-            // imageInfo.getRgbChannelDef()
+            if (StringUtils.isNotNullAndNotEmpty(imageInfo.getUncertaintyBandName())) {
+                infoM.put(UNCERTAINTY_BAND_NAME, imageInfo.getUncertaintyBandName());
+            }
+            if (imageInfo.getUncertaintyVisualisationMode() != null) {
+                final ImageInfo.UncertaintyVisualisationMode mode = imageInfo.getUncertaintyVisualisationMode();
+                infoM.put(UNCERTAINTY_VISUALISATION_MODE, mode.toString());
+            }
             attributes.put(IMAGE_INFO, infoM);
         }
     }
