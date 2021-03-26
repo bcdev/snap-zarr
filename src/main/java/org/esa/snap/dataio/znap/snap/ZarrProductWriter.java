@@ -18,11 +18,16 @@ import org.esa.snap.core.dataio.geocoding.ComponentGeoCoding;
 import org.esa.snap.core.dataio.geocoding.GeoRaster;
 import org.esa.snap.core.dataio.geometry.VectorDataNodeIO;
 import org.esa.snap.core.dataio.geometry.WriterBasedVectorDataNodeWriter;
+import org.esa.snap.core.dataio.persistence.Item;
+import org.esa.snap.core.dataio.persistence.JsonLanguageSupport;
+import org.esa.snap.core.dataio.persistence.Persistence;
+import org.esa.snap.core.dataio.persistence.PersistenceEncoder;
 import org.esa.snap.core.datamodel.Band;
 import org.esa.snap.core.datamodel.ColorPaletteDef;
 import org.esa.snap.core.datamodel.CrsGeoCoding;
 import org.esa.snap.core.datamodel.GeoCoding;
 import org.esa.snap.core.datamodel.ImageInfo;
+import org.esa.snap.core.datamodel.Mask;
 import org.esa.snap.core.datamodel.MetadataAttribute;
 import org.esa.snap.core.datamodel.MetadataElement;
 import org.esa.snap.core.datamodel.Product;
@@ -93,6 +98,10 @@ public class ZarrProductWriter extends AbstractProductWriter {
     private final HashMap<Band, BinaryWriter> zarrWriters = new HashMap<>();
     private final Compressor compressor;
     private final ProductWriterPlugIn binaryWriterPlugIn;
+
+    private final Persistence persistence = new Persistence();
+    private final JsonLanguageSupport languageSupport = new JsonLanguageSupport();
+
     private ZarrGroup zarrGroup;
     private Path outputRoot;
     private List<GeoCoding> sharedGeoCodings;
@@ -226,7 +235,12 @@ public class ZarrProductWriter extends AbstractProductWriter {
         collectGeneralProductAttrs(attributes);
         collectProductGeoCodingAttrs(attributes);
         // flag attributes collected per Band (Flag or Index Band). see collectSampleCodingAttributes()
+        collectMaskAttrs(attributes);
         return attributes;
+    }
+
+    private void collectMaskAttrs(Map<String, Object> attributes) {
+        final ProductNodeGroup<Mask> maskGroup = getSourceProduct().getMaskGroup();
     }
 
     private void collectProductGeoCodingAttrs(Map<String, Object> attrs) {
@@ -263,13 +277,20 @@ public class ZarrProductWriter extends AbstractProductWriter {
         }
     }
 
-    HashMap<String, Object> getGeoCodingAttributes(GeoCoding gc) {
+    Map<String, Object> getGeoCodingAttributes(GeoCoding gc) {
         final HashMap<String, Object> map = new HashMap<>();
         map.put(ATT_NAME_GEOCODING_TYPE, gc.getClass().getSimpleName());
         if (sharedGeoCodings.contains(gc)) {
             map.put(ATT_NAME_GEOCODING_SHARED, true);
         }
-        if (gc instanceof ComponentGeoCoding) {
+        final PersistenceEncoder<Object> encoder = persistence.getEncoder(gc);
+        if (encoder != null) {
+            final Item item = encoder.encode(gc);
+            final Map<String, Object> translation = languageSupport.translateToLanguageObject(item);
+            map.put("persistence", translation);
+            return map;
+        }
+        /*if (gc instanceof ComponentGeoCoding) {
 
             final ComponentGeoCoding componentGC = (ComponentGeoCoding) gc;
 
@@ -287,7 +308,8 @@ public class ZarrProductWriter extends AbstractProductWriter {
             map.put(TAG_OFFSET_Y, geoRaster.getOffsetY());
             map.put(TAG_SUBSAMPLING_X, geoRaster.getSubsamplingX());
             map.put(TAG_SUBSAMPLING_Y, geoRaster.getSubsamplingY());
-        } else if (gc instanceof TiePointGeoCoding) {
+        } else*/
+        if (gc instanceof TiePointGeoCoding) {
             final TiePointGeoCoding tpgc = (TiePointGeoCoding) gc;
             final String latGridName = tpgc.getLatGrid().getName();
             map.put("latGridName", latGridName);

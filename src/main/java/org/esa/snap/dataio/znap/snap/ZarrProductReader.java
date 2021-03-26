@@ -17,6 +17,10 @@ import org.esa.snap.core.dataio.geocoding.GeoRaster;
 import org.esa.snap.core.dataio.geocoding.InverseCoding;
 import org.esa.snap.core.dataio.geometry.VectorDataNodeIO;
 import org.esa.snap.core.dataio.geometry.VectorDataNodeReader;
+import org.esa.snap.core.dataio.persistence.Item;
+import org.esa.snap.core.dataio.persistence.JsonLanguageSupport;
+import org.esa.snap.core.dataio.persistence.Persistence;
+import org.esa.snap.core.dataio.persistence.PersistenceDecoder;
 import org.esa.snap.core.datamodel.Band;
 import org.esa.snap.core.datamodel.ColorPaletteDef;
 import org.esa.snap.core.datamodel.CrsGeoCoding;
@@ -107,6 +111,9 @@ public class ZarrProductReader extends AbstractProductReader {
     private HashMap<DataNode, Product> binaryProducts;
     private final Map<ProductNode, Map<String, Object>> nodeAttributes = new HashMap<>();
     private final Map<Map<String, Object>, GeoCoding> sharedGeoCodings = new HashMap<>();
+
+    private final Persistence persistence = new Persistence();
+    private final JsonLanguageSupport languageSupport = new JsonLanguageSupport();
 
     protected ZarrProductReader(ProductReaderPlugIn readerPlugIn) {
         super(readerPlugIn);
@@ -329,8 +336,21 @@ public class ZarrProductReader extends AbstractProductReader {
         final Product product = node.getProduct();
         final String type = (String) gcAttribs.get("type");
         LOG.info("------------------------------------------------------------------------");
-        if (ComponentGeoCoding.class.getSimpleName().equals(type)) {
-            LOG.info("create " + ComponentGeoCoding.class.getSimpleName() + " for " + node.getName());
+        if (StringUtils.isNotNullAndNotEmpty(type)) {
+            LOG.info("create " + type + " for " + node.getName());
+        }
+        if (gcAttribs.containsKey("persistence")) {
+            final Map<String, Object> persistenceObj = (Map) gcAttribs.get("persistence");
+            final Item item = languageSupport.translateToItem(persistenceObj);
+            final PersistenceDecoder<GeoCoding> decoder = this.persistence.getDecoder(item);
+            if (decoder != null) {
+                GeoCoding gc = decoder.decode(item, product);
+                if (gc != null) {
+                    return gc;
+                }
+            }
+        }
+/*        if (ComponentGeoCoding.class.getSimpleName().equals(type)) {
             try {
                 final String forwardKey = getNotEmptyString(gcAttribs, TAG_FORWARD_CODING_KEY);
                 final ForwardCoding forwardCoding = ComponentFactory.getForward(forwardKey);
@@ -418,8 +438,8 @@ public class ZarrProductReader extends AbstractProductReader {
             } catch (IllegalArgumentException e) {
                 LOG.warning(createWarning(e));
             }
-        } else if (TiePointGeoCoding.class.getSimpleName().equals(type)) {
-            LOG.info("create " + TiePointGeoCoding.class.getSimpleName() + " for " + node.getName());
+        } else*/
+        if (TiePointGeoCoding.class.getSimpleName().equals(type)) {
             final TiePointGrid lat = product.getTiePointGrid((String) gcAttribs.get("latGridName"));
             final TiePointGrid lon = product.getTiePointGrid((String) gcAttribs.get("lonGridName"));
             final String geoCRS_wkt = (String) gcAttribs.get("geoCRS_WKT");
@@ -435,7 +455,6 @@ public class ZarrProductReader extends AbstractProductReader {
                 return new TiePointGeoCoding(lat, lon);
             }
         } else if (CrsGeoCoding.class.getSimpleName().equals(type)) {
-            LOG.info("create " + CrsGeoCoding.class.getSimpleName() + " for " + node.getName());
             final int width;
             final int height;
             if (node instanceof RasterDataNode) {
@@ -576,7 +595,7 @@ public class ZarrProductReader extends AbstractProductReader {
             final double meanSample = ((Number) stxM.get(DimapProductConstants.TAG_STX_MEAN)).doubleValue();
             final double stdDev = ((Number) stxM.get(DimapProductConstants.TAG_STX_STDDEV)).doubleValue();
             final boolean intHistogram = !ProductData.isFloatingPointType(rasterDataNode.getGeophysicalDataType());
-            final int[] bins = ((List<Integer>)stxM.get(DimapProductConstants.TAG_HISTOGRAM))
+            final int[] bins = ((List<Integer>) stxM.get(DimapProductConstants.TAG_HISTOGRAM))
                     .stream().mapToInt(Integer::intValue).toArray();
             final int resLevel = ((Number) stxM.get(DimapProductConstants.TAG_STX_LEVEL)).intValue();
             final Stx stx = new StxFactory()
@@ -597,7 +616,7 @@ public class ZarrProductReader extends AbstractProductReader {
                 final ColorPaletteDef.Point point = new ColorPaletteDef.Point();
                 if (pointM.containsKey(LABEL)) {
                     String label = (String) pointM.get(LABEL);
-                    label = label != null? label.trim(): label;
+                    label = label != null ? label.trim() : label;
                     if (StringUtils.isNotNullAndNotEmpty(label)) {
                         point.setLabel(label);
                     }
@@ -610,12 +629,12 @@ public class ZarrProductReader extends AbstractProductReader {
             }
 
             final ColorPaletteDef colorPaletteDef = new ColorPaletteDef(points.toArray(new ColorPaletteDef.Point[0]));
-            colorPaletteDef.setNumColors((int)infoM.get(COLOR_PALETTE_NUM_COLORS));
+            colorPaletteDef.setNumColors((int) infoM.get(COLOR_PALETTE_NUM_COLORS));
             colorPaletteDef.setDiscrete((boolean) infoM.get(COLOR_PALETTE_DISCRETE));
-            colorPaletteDef.setAutoDistribute((boolean)infoM.get(COLOR_PALETTE_AUTO_DISTRIBUTE));
+            colorPaletteDef.setAutoDistribute((boolean) infoM.get(COLOR_PALETTE_AUTO_DISTRIBUTE));
             final ImageInfo imageInfo = new ImageInfo(colorPaletteDef);
             if (infoM.containsKey(NO_DATA_COLOR_RGBA)) {
-                final int[] rgba = ((List<Integer>)infoM.get(NO_DATA_COLOR_RGBA))
+                final int[] rgba = ((List<Integer>) infoM.get(NO_DATA_COLOR_RGBA))
                         .stream().mapToInt(Integer::intValue).toArray();
                 imageInfo.setNoDataColor(createColor(rgba));
             }
@@ -623,10 +642,10 @@ public class ZarrProductReader extends AbstractProductReader {
             final ImageInfo.HistogramMatching histogramMatching = ImageInfo.HistogramMatching.valueOf(matching);
             imageInfo.setHistogramMatching(histogramMatching);
             imageInfo.setLogScaled((boolean) infoM.get(LOG_10_SCALED));
-            if(infoM.containsKey(UNCERTAINTY_BAND_NAME)) {
+            if (infoM.containsKey(UNCERTAINTY_BAND_NAME)) {
                 imageInfo.setUncertaintyBandName((String) infoM.get(UNCERTAINTY_BAND_NAME));
             }
-            if(infoM.containsKey(UNCERTAINTY_VISUALISATION_MODE)) {
+            if (infoM.containsKey(UNCERTAINTY_VISUALISATION_MODE)) {
                 final String modeName = (String) infoM.get(UNCERTAINTY_VISUALISATION_MODE);
                 final ImageInfo.UncertaintyVisualisationMode mode;
                 mode = ImageInfo.UncertaintyVisualisationMode.valueOf(modeName);

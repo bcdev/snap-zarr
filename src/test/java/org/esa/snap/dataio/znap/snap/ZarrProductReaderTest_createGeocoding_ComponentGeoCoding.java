@@ -39,6 +39,7 @@ public class ZarrProductReaderTest_createGeocoding_ComponentGeoCoding {
     private HashMap gcAttribs;
     private ByteArrayOutputStream logOutput;
     private StreamHandler handler;
+    private HashMap<Object, Object> theGeoCodingMap;
 
     @Before
     public void setUp() throws Exception {
@@ -98,17 +99,22 @@ public class ZarrProductReaderTest_createGeocoding_ComponentGeoCoding {
 
         gcAttribs = new HashMap();
         gcAttribs.put("type", ComponentGeoCoding.class.getSimpleName());
-        gcAttribs.put(TAG_FORWARD_CODING_KEY, TiePointBilinearForward.KEY);
-        gcAttribs.put(TAG_INVERSE_CODING_KEY, TiePointInverse.KEY);
-        gcAttribs.put(TAG_GEO_CHECKS, GeoChecks.ANTIMERIDIAN.name());
-        gcAttribs.put(TAG_GEO_CRS, geoCRS_WKT);
-        gcAttribs.put(TAG_LON_VARIABLE_NAME, "lon");
-        gcAttribs.put(TAG_LAT_VARIABLE_NAME, "lat");
-        gcAttribs.put(TAG_RASTER_RESOLUTION_KM, 234.0);
-        gcAttribs.put(TAG_OFFSET_X, 0.5);
-        gcAttribs.put(TAG_OFFSET_Y, 0.5);
-        gcAttribs.put(TAG_SUBSAMPLING_X, 5.0);
-        gcAttribs.put(TAG_SUBSAMPLING_Y, 5.0);
+        final HashMap<String, Object> persistenceHolder = new HashMap<>();
+        gcAttribs.put("persistence", persistenceHolder);
+
+        theGeoCodingMap = new HashMap<>();
+        persistenceHolder.put("ComponentGeoCoding", theGeoCodingMap);
+        theGeoCodingMap.put(TAG_FORWARD_CODING_KEY, TiePointBilinearForward.KEY);
+        theGeoCodingMap.put(TAG_INVERSE_CODING_KEY, TiePointInverse.KEY);
+        theGeoCodingMap.put(TAG_GEO_CHECKS, GeoChecks.ANTIMERIDIAN.name());
+        theGeoCodingMap.put(TAG_GEO_CRS, geoCRS_WKT);
+        theGeoCodingMap.put(TAG_LON_VARIABLE_NAME, "lon");
+        theGeoCodingMap.put(TAG_LAT_VARIABLE_NAME, "lat");
+        theGeoCodingMap.put(TAG_RASTER_RESOLUTION_KM, 234.0);
+        theGeoCodingMap.put(TAG_OFFSET_X, 0.5);
+        theGeoCodingMap.put(TAG_OFFSET_Y, 0.5);
+        theGeoCodingMap.put(TAG_SUBSAMPLING_X, 5.0);
+        theGeoCodingMap.put(TAG_SUBSAMPLING_Y, 5.0);
 
         logOutput = new ByteArrayOutputStream();
         handler = new StreamHandler(logOutput, new SimpleFormatter());
@@ -152,10 +158,10 @@ public class ZarrProductReaderTest_createGeocoding_ComponentGeoCoding {
     @Test
     public void createGeoCoding__allIsfineWithBands() throws IOException {
         //preparation
-        gcAttribs.put(TAG_FORWARD_CODING_KEY, PixelForward.KEY);
-        gcAttribs.put(TAG_INVERSE_CODING_KEY, PixelQuadTreeInverse.KEY);
-        gcAttribs.put(TAG_LON_VARIABLE_NAME, "Long");
-        gcAttribs.put(TAG_LAT_VARIABLE_NAME, "Lati");
+        theGeoCodingMap.put(TAG_FORWARD_CODING_KEY, PixelForward.KEY);
+        theGeoCodingMap.put(TAG_INVERSE_CODING_KEY, PixelQuadTreeInverse.KEY);
+        theGeoCodingMap.put(TAG_LON_VARIABLE_NAME, "Long");
+        theGeoCodingMap.put(TAG_LAT_VARIABLE_NAME, "Lati");
 
         //execution
         final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
@@ -172,126 +178,6 @@ public class ZarrProductReaderTest_createGeocoding_ComponentGeoCoding {
     }
 
     @Test
-    public void createGeoCoding_missingForwardCodingKey() throws IOException {
-        //preparation
-        gcAttribs.remove(TAG_FORWARD_CODING_KEY);
-
-        //execution
-        final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
-
-        //verification
-        assertThat(geoCoding, is(nullValue()));
-
-        final ArrayList<String> orderedExpectations = new ArrayList<>();
-        orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("[" + TAG_FORWARD_CODING_KEY + "] is null");
-        orderedExpectations.add(productReader.getClass().getName());
-
-        assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
-    }
-
-    @Test
-    public void createGeoCoding_missingInverseCodingKey() throws IOException {
-        //preparation
-        gcAttribs.remove(TAG_INVERSE_CODING_KEY);
-
-        //execution
-        final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
-
-        //verification
-        assertThat(geoCoding, is(nullValue()));
-
-        final ArrayList<String> orderedExpectations = new ArrayList<>();
-        orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("[" + TAG_INVERSE_CODING_KEY + "] is null");
-        orderedExpectations.add(productReader.getClass().getName());
-
-        assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
-    }
-
-    @Test
-    public void createGeoCoding_missingGeoChecksKey() throws IOException {
-        //preparation
-        gcAttribs.remove(TAG_GEO_CHECKS);
-
-        //execution
-        final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
-
-        //verification
-        assertThat(geoCoding, is(nullValue()));
-
-        final ArrayList<String> orderedExpectations = new ArrayList<>();
-        orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("[" + TAG_GEO_CHECKS + "] is null");
-        orderedExpectations.add(productReader.getClass().getName());
-
-        assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
-    }
-
-    @Test
-    public void createGeoCoding_missingGeoCrsKey() throws IOException {
-        //preparation
-        gcAttribs.remove(TAG_GEO_CRS);
-
-        //execution
-        final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
-
-        //verification
-        assertThat(geoCoding, is(nullValue()));
-
-        final ArrayList<String> orderedExpectations = new ArrayList<>();
-        orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("[" + TAG_GEO_CRS + "] is null");
-        orderedExpectations.add(productReader.getClass().getName());
-
-        assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
-    }
-
-    @Test
-    public void createGeoCoding_geoCrsValueIsNotParseable() throws IOException {
-        //preparation
-        gcAttribs.put(TAG_GEO_CRS, "unparseable crs");
-
-        //execution
-        final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
-
-        //verification
-        assertThat(geoCoding, is(nullValue()));
-
-        final ArrayList<String> orderedExpectations = new ArrayList<>();
-        orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("Unable to parse WKT for geoCRS");
-        orderedExpectations.add(productReader.getClass().getName());
-
-        assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
-    }
-
-    @Test
-    public void createGeoCoding_missingLonVarNameKey() throws IOException {
-        //preparation
-        gcAttribs.remove(TAG_LON_VARIABLE_NAME);
-
-        //execution
-        final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
-
-        //verification
-        assertThat(geoCoding, is(nullValue()));
-
-        final ArrayList<String> orderedExpectations = new ArrayList<>();
-        orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("[" + TAG_LON_VARIABLE_NAME + "] is null");
-        orderedExpectations.add(productReader.getClass().getName());
-
-        assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
-    }
-
-    @Test
     public void createGeoCoding_missingLonVariable() throws IOException {
         //preparation
         product.removeTiePointGrid(product.getTiePointGrid("lon"));
@@ -304,29 +190,11 @@ public class ZarrProductReaderTest_createGeocoding_ComponentGeoCoding {
 
         final ArrayList<String> orderedExpectations = new ArrayList<>();
         orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("Longitude raster 'lon' expected but was null.");
-        orderedExpectations.add(productReader.getClass().getName());
-
-        assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
-    }
-
-    @Test
-    public void createGeoCoding_missingLatVarNameKey() throws IOException {
-        //preparation
-        gcAttribs.remove(TAG_LAT_VARIABLE_NAME);
-
-        //execution
-        final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
-
-        //verification
-        assertThat(geoCoding, is(nullValue()));
-
-        final ArrayList<String> orderedExpectations = new ArrayList<>();
-        orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("[" + TAG_LAT_VARIABLE_NAME + "] is null");
-        orderedExpectations.add(productReader.getClass().getName());
+        orderedExpectations.add("createGeoCoding");
+        orderedExpectations.add("create ComponentGeoCoding for TestProduct");
+        orderedExpectations.add("org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistenceConverter decode");
+        orderedExpectations.add("Unable to find expected longitude raster 'lon' in product");
+        orderedExpectations.add("Unable to create ComponentGeoCoding");
 
         assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
     }
@@ -344,109 +212,11 @@ public class ZarrProductReaderTest_createGeocoding_ComponentGeoCoding {
 
         final ArrayList<String> orderedExpectations = new ArrayList<>();
         orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("Latitude raster 'lat' expected but was null.");
-        orderedExpectations.add(productReader.getClass().getName());
-
-        assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
-    }
-
-    @Test
-    public void createGeoCoding_missingRasterResolutionKey() throws IOException {
-        //preparation
-        gcAttribs.remove(TAG_RASTER_RESOLUTION_KM);
-
-        //execution
-        final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
-
-        //verification
-        assertThat(geoCoding, is(nullValue()));
-
-        final ArrayList<String> orderedExpectations = new ArrayList<>();
-        orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("[" + TAG_RASTER_RESOLUTION_KM + "] is null");
-        orderedExpectations.add(productReader.getClass().getName());
-
-        assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
-    }
-
-    @Test
-    public void createGeoCoding_missingOffsetXKey() throws IOException {
-        //preparation
-        gcAttribs.remove(TAG_OFFSET_X);
-
-        //execution
-        final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
-
-        //verification
-        assertThat(geoCoding, is(nullValue()));
-
-        final ArrayList<String> orderedExpectations = new ArrayList<>();
-        orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("[" + TAG_OFFSET_X + "] is null");
-        orderedExpectations.add(productReader.getClass().getName());
-
-        assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
-    }
-
-    @Test
-    public void createGeoCoding_missingOffsetYKey() throws IOException {
-        //preparation
-        gcAttribs.remove(TAG_OFFSET_Y);
-
-        //execution
-        final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
-
-        //verification
-        assertThat(geoCoding, is(nullValue()));
-
-        final ArrayList<String> orderedExpectations = new ArrayList<>();
-        orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("[" + TAG_OFFSET_Y + "] is null");
-        orderedExpectations.add(productReader.getClass().getName());
-
-        assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
-    }
-
-    @Test
-    public void createGeoCoding_missingSubsamplingXKey() throws IOException {
-        //preparation
-        gcAttribs.remove(TAG_SUBSAMPLING_X);
-
-        //execution
-        final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
-
-        //verification
-        assertThat(geoCoding, is(nullValue()));
-
-        final ArrayList<String> orderedExpectations = new ArrayList<>();
-        orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("[" + TAG_SUBSAMPLING_X + "] is null");
-        orderedExpectations.add(productReader.getClass().getName());
-
-        assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
-    }
-
-    @Test
-    public void createGeoCoding_missingSubsamplingYKey() throws IOException {
-        //preparation
-        gcAttribs.remove(TAG_SUBSAMPLING_Y);
-
-        //execution
-        final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
-
-        //verification
-        assertThat(geoCoding, is(nullValue()));
-
-        final ArrayList<String> orderedExpectations = new ArrayList<>();
-        orderedExpectations.add(productReader.getClass().getName());
-        orderedExpectations.add("Unable to create geo-coding");
-        orderedExpectations.add("[" + TAG_SUBSAMPLING_Y + "] is null");
-        orderedExpectations.add(productReader.getClass().getName());
+        orderedExpectations.add("createGeoCoding");
+        orderedExpectations.add("create ComponentGeoCoding for TestProduct");
+        orderedExpectations.add("org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistenceConverter decode");
+        orderedExpectations.add("Unable to find expected latitude raster 'lat' in product");
+        orderedExpectations.add("Unable to create ComponentGeoCoding");
 
         assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
     }
