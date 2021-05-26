@@ -45,7 +45,7 @@ public class ZarrProductWriterPlugIn implements ProductWriterPlugIn {
     }
 
     public String[] getDefaultFileExtensions() {
-        return new String[]{SNAP_ZARR_CONTAINER_EXTENSION};
+        return new String[]{SNAP_ZARR_CONTAINER_EXTENSION, SNAP_ZARR_ZIP_CONTAINER_EXTENSION};
     }
 
     public String getDescription(Locale locale) {

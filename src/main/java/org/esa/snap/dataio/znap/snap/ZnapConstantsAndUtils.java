@@ -23,7 +23,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.ObjectCodec;
 import com.fasterxml.jackson.core.Version;
 import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
@@ -37,9 +39,10 @@ import org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 
 final class ZnapConstantsAndUtils {
@@ -51,6 +54,7 @@ final class ZnapConstantsAndUtils {
 
     static final String FORMAT_NAME = "SNAP-Zarr";
     static final String SNAP_ZARR_CONTAINER_EXTENSION = ".znap";
+    static final String SNAP_ZARR_ZIP_CONTAINER_EXTENSION = ".znap.zip";
 
     public static final String UNIT_EXTENSION = "_unit";
     public static final String BANDWIDTH = "bandwidth";
@@ -164,8 +168,8 @@ final class ZnapConstantsAndUtils {
     private static final SimpleModule metadataModule;
 
     static {
-        metadataModule = new SimpleModule("Metadata", new Version(1, 0, 0, null, null, null));
-        metadataModule.addSerializer(MetadataElement.class, new StdSerializer<MetadataElement>(MetadataElement.class) {
+
+        final StdSerializer<MetadataElement> metadataElementStdSerializer = new StdSerializer<MetadataElement>(MetadataElement.class) {
             @Override
             public void serialize(MetadataElement value, JsonGenerator gen, SerializerProvider provider) throws IOException {
                 gen.writeStartObject();
@@ -191,8 +195,8 @@ final class ZnapConstantsAndUtils {
                 }
                 gen.writeEndObject();
             }
-        });
-        metadataModule.addDeserializer(MetadataElement.class, new StdDeserializer<MetadataElement>(MetadataElement.class) {
+        };
+        final StdDeserializer<?> metadataElementStdDeserializer = new StdDeserializer<MetadataElement>(MetadataElement.class) {
             @Override
             public MetadataElement deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JsonProcessingException {
                 final ObjectCodec codec = p.getCodec();
@@ -219,7 +223,7 @@ final class ZnapConstantsAndUtils {
                     final Iterator<JsonNode> iterator = elements.iterator();
                     while (iterator.hasNext()) {
                         JsonNode next = iterator.next();
-                        if(!next.isObject()) {
+                        if (!next.isObject()) {
                             throw new IllegalStateException("Object expected!");
                         }
                         final MetadataElement metadataElement = codec.readValue(next.traverse(codec), MetadataElement.class);
@@ -228,8 +232,8 @@ final class ZnapConstantsAndUtils {
                 }
                 return element;
             }
-        });
-        metadataModule.addSerializer(MetadataAttribute.class, new StdSerializer<MetadataAttribute>(MetadataAttribute.class) {
+        };
+        final StdSerializer<MetadataAttribute> metadataAttributeStdSerializer = new StdSerializer<MetadataAttribute>(MetadataAttribute.class) {
             @Override
             public void serialize(MetadataAttribute value, JsonGenerator gen, SerializerProvider provider) throws IOException {
                 gen.writeStartObject();
@@ -242,8 +246,8 @@ final class ZnapConstantsAndUtils {
                 }
                 gen.writeEndObject();
             }
-        });
-        metadataModule.addDeserializer(MetadataAttribute.class, new StdDeserializer<MetadataAttribute>(MetadataAttribute.class) {
+        };
+        final StdDeserializer<MetadataAttribute> metadataAttributeStdDeserializer = new StdDeserializer<MetadataAttribute>(MetadataAttribute.class) {
             @Override
             public MetadataAttribute deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JsonProcessingException {
                 final ObjectCodec codec = p.getCodec();
@@ -260,8 +264,8 @@ final class ZnapConstantsAndUtils {
                 }
                 return attribute;
             }
-        });
-        metadataModule.addSerializer(ProductData.class, new StdSerializer<ProductData>(ProductData.class) {
+        };
+        final StdSerializer<ProductData> productDataStdSerializer = new StdSerializer<ProductData>(ProductData.class) {
             @Override
             public void serialize(ProductData value, JsonGenerator gen, SerializerProvider provider) throws IOException {
                 gen.writeStartObject();
@@ -282,8 +286,8 @@ final class ZnapConstantsAndUtils {
                 }
                 gen.writeEndObject();
             }
-        });
-        metadataModule.addDeserializer(ProductData.class, new StdDeserializer<ProductData>(ProductData.class) {
+        };
+        final StdDeserializer<ProductData> productDataStdDeserializer = new StdDeserializer<ProductData>(ProductData.class) {
             @Override
             public ProductData deserialize(JsonParser parser, DeserializationContext ctxt) throws IOException, JsonProcessingException {
                 ObjectCodec codec = parser.getCodec();
@@ -322,7 +326,18 @@ final class ZnapConstantsAndUtils {
                 }
                 return ProductData.createInstance(type, o);
             }
-        });
+        };
+
+        final HashMap<Class<?>, JsonDeserializer<?>> deserializers = new HashMap<>();
+        deserializers.put(MetadataElement.class, metadataElementStdDeserializer);
+        deserializers.put(MetadataAttribute.class, metadataAttributeStdDeserializer);
+        deserializers.put(ProductData.class, productDataStdDeserializer);
+
+        final ArrayList<JsonSerializer<?>> serializers = new ArrayList<>();
+        serializers.add(metadataElementStdSerializer);
+        serializers.add(metadataAttributeStdSerializer);
+        serializers.add(productDataStdSerializer);
+        metadataModule = new SimpleModule("Metadata", new Version(1, 0, 0, null, null, null), deserializers, serializers);
     }
 
     public static MetadataElement[] jsonToMetadata(String jsonMetadataString) throws JsonProcessingException {

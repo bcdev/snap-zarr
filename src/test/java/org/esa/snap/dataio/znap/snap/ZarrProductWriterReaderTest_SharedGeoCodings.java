@@ -87,18 +87,6 @@ public class ZarrProductWriterReaderTest_SharedGeoCodings {
     }
 
     @Test
-    public void collectSharedGeoCodings() {
-        final List<GeoCoding> geoCodings = ZarrProductWriter.collectSharedGeoCodings(product);
-
-        assertThat(geoCodings, is(notNullValue()));
-        assertThat(geoCodings.size(), is(2));
-        assertThat(geoCodings.contains(sceneGeoCoding), is(true));
-        assertThat(geoCodings.contains(sharedGC), is(true));
-        assertThat(geoCodings.contains(single_1), is(false));
-        assertThat(geoCodings.contains(single_2), is(false));
-    }
-
-    @Test
     public void testThatSharedGeocodingsAreMarkedInZarrAttributes() throws IOException {
         final ZarrProductWriter zarrProductWriter = new ZarrProductWriter(new ZarrProductWriterPlugIn());
         final Path rootPath = createTempDirectory();
@@ -109,7 +97,6 @@ public class ZarrProductWriterReaderTest_SharedGeoCodings {
         final ZarrGroup group = ZarrGroup.open(rootPath);
         final Map geocoding = (Map) group.getAttributes().get(ATT_NAME_GEOCODING);
         assertThat(geocoding, is(notNullValue()));
-        assertThat(geocoding.get(ATT_NAME_GEOCODING_SHARED), is(true));
 
         // Verify that if a band has its own geocoding shared with other bands
         // then the geo coding attributes must contain the Key "shared" and the value true.
@@ -120,11 +107,7 @@ public class ZarrProductWriterReaderTest_SharedGeoCodings {
             if (bandOwnsGC) {
                 assertThat(attr.containsKey(ATT_NAME_GEOCODING), is(true));
                 final Map gcAttr = (Map) attr.get(ATT_NAME_GEOCODING);
-                if (band.getGeoCoding() == sharedGC) {
-                    assertThat(gcAttr.get(ATT_NAME_GEOCODING_SHARED), is(true));
-                } else {
-                    assertThat(gcAttr.containsKey(ATT_NAME_GEOCODING_SHARED), is (false));
-                }
+                assertThat(gcAttr.containsKey(ATT_NAME_GEOCODING_SHARED), is(false));
             }
         }
     }

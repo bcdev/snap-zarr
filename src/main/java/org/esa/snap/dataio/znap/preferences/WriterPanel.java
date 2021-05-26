@@ -7,12 +7,12 @@ package org.esa.snap.dataio.znap.preferences;
 
 import org.esa.snap.core.dataio.ProductIOPlugInManager;
 import org.esa.snap.core.dataio.ProductWriterPlugIn;
-import org.esa.snap.core.util.ArrayUtils;
 import org.esa.snap.dataio.znap.snap.ZarrProductWriterPlugIn;
 import org.esa.snap.rcp.SnapApp;
 import org.esa.snap.runtime.Config;
 
 import javax.swing.GroupLayout;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -25,7 +25,6 @@ import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 
 import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.*;
-import static org.esa.snap.dataio.znap.snap.ZarrProductWriter.DEFAULT_COMPRESSION_LEVEL;
 
 final class WriterPanel extends javax.swing.JPanel {
 
@@ -40,6 +39,8 @@ final class WriterPanel extends javax.swing.JPanel {
     private JComboBox<String> compressorCombo;
     private JComponent compressionLevelLabel;
     private JComboBox<String> compressionLevelCombo;
+    private JComponent createZipArchiveLabel;
+    private JCheckBox createZipArchiveCheck;
 
     WriterPanel(WriterOptionsPanelController controller) {
         this.controller = controller;
@@ -79,6 +80,9 @@ final class WriterPanel extends javax.swing.JPanel {
         int compressionLevel = preferences.getInt(PROPERTY_NAME_COMPRESSION_LEVEL, DEFAULT_COMPRESSION_LEVEL);
         int idx = Arrays.asList(ZLIB_COMPRESSION_LEVELS).indexOf(compressionLevel);
         compressionLevelCombo.setSelectedIndex(idx);
+
+        final boolean useZipArchive = preferences.getBoolean(PROPERTY_NAME_USE_ZIP_ARCHIVE, DEFAULT_USE_ZIP_ARCHIVE);
+        createZipArchiveCheck.setSelected(useZipArchive);
     }
 
     void store() {
@@ -89,6 +93,7 @@ final class WriterPanel extends javax.swing.JPanel {
                 preferences.put(PROPERTY_NAME_BINARY_FORMAT, selectedFormat);
                 preferences.remove(PROPERTY_NAME_COMPRESSOR_ID);
                 preferences.remove(PROPERTY_NAME_COMPRESSION_LEVEL);
+                preferences.put(PROPERTY_NAME_USE_ZIP_ARCHIVE, String.valueOf(false));
                 return;
             }
             preferences.remove(PROPERTY_NAME_BINARY_FORMAT);
@@ -105,6 +110,12 @@ final class WriterPanel extends javax.swing.JPanel {
             } else if (COMPRESSOR_NULL.equals(compressorId)) {
                 preferences.put(PROPERTY_NAME_COMPRESSOR_ID, compressorId);
                 preferences.remove(PROPERTY_NAME_COMPRESSION_LEVEL);
+            }
+            final boolean useZipArchive = createZipArchiveCheck.isSelected();
+            if (useZipArchive != DEFAULT_USE_ZIP_ARCHIVE) {
+                preferences.put(PROPERTY_NAME_USE_ZIP_ARCHIVE, String.valueOf(useZipArchive));
+            } else {
+                preferences.remove(PROPERTY_NAME_USE_ZIP_ARCHIVE);
             }
         } finally {
             try {
@@ -130,8 +141,8 @@ final class WriterPanel extends javax.swing.JPanel {
         compressorLabel = new JLabel("Compressor:");
         compressorCombo = new JComboBox<>(new String[]{ZLIB_DEFAULT_COMPRESSOR_LIB, COMPRESSOR_NULL});
 
-        compressionLevelLabel = new JLabel("Compression level");
-        compressionLevelCombo = new JComboBox<String>();
+        compressionLevelLabel = new JLabel("Compression level:");
+        compressionLevelCombo = new JComboBox<>();
         for (Integer zlibCompressionLevel : ZLIB_COMPRESSION_LEVELS) {
             String item = zlibCompressionLevel.toString();
             if (zlibCompressionLevel == DEFAULT_COMPRESSION_LEVEL) {
@@ -139,6 +150,10 @@ final class WriterPanel extends javax.swing.JPanel {
             }
             compressionLevelCombo.addItem(item);
         }
+
+        createZipArchiveLabel = new JLabel("Create zip arcive:");
+        createZipArchiveCheck = new JCheckBox();
+//        createZipArchiveCheck = new JCheckBox("Create zip archive");
 
         setBorder(new TitledBorder("SNAP-ZARR Options"));
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
@@ -159,6 +174,10 @@ final class WriterPanel extends javax.swing.JPanel {
                                 layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                                         .addComponent(compressionLevelLabel)
                                         .addComponent(compressionLevelCombo))
+                        .addGroup(
+                                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                        .addComponent(createZipArchiveLabel)
+                                        .addComponent(createZipArchiveCheck))
                         .addGap(0, 2000, Short.MAX_VALUE)
         );
         layout.setHorizontalGroup(
@@ -167,12 +186,14 @@ final class WriterPanel extends javax.swing.JPanel {
                                 layout.createParallelGroup(GroupLayout.Alignment.LEADING)
                                         .addComponent(binaryFormatLabel)
                                         .addComponent(compressorLabel)
-                                        .addComponent(compressionLevelLabel))
+                                        .addComponent(compressionLevelLabel)
+                                        .addComponent(createZipArchiveLabel))
                         .addGroup(
                                 layout.createParallelGroup(GroupLayout.Alignment.LEADING)
                                         .addComponent(binaryFormatCombo)
                                         .addComponent(compressorCombo)
-                                        .addComponent(compressionLevelCombo))
+                                        .addComponent(compressionLevelCombo)
+                                        .addComponent(createZipArchiveCheck))
                         .addGap(0, 2000, Short.MAX_VALUE)
         );
 
@@ -186,7 +207,7 @@ final class WriterPanel extends javax.swing.JPanel {
         binaryFormatCombo.addItemListener(itemListener);
         compressorCombo.addItemListener(itemListener);
         compressionLevelCombo.addItemListener(itemListener);
-
+        createZipArchiveCheck.addItemListener(itemListener);
     }
 
     private void updateState() {
@@ -197,5 +218,7 @@ final class WriterPanel extends javax.swing.JPanel {
         boolean levelEnabled = zarrFormat && zlibDefaultCompressor;
         compressionLevelCombo.setEnabled(levelEnabled);
         compressionLevelLabel.setEnabled(levelEnabled);
+        createZipArchiveLabel.setEnabled(zarrFormat);
+        createZipArchiveCheck.setEnabled(zarrFormat);
     }
 }

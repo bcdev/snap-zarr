@@ -85,25 +85,12 @@ public class ZarrProductReaderTest_createGeocoding_ComponentGeoCoding {
         lonBand.setDataElems(dDataLon);
         latBand.setDataElems(dDataLat);
 
-//        final double[] longitudes = IntStream.range(0, fDataLon.length).mapToDouble(i -> fDataLon[i]).toArray();
-//        final double[] latitudes = IntStream.range(0, fDataLat.length).mapToDouble(i -> fDataLat[i]).toArray();
-//        final GeoRaster geoRaster = new GeoRaster(longitudes, latitudes, lon.getName(), lat.getName(), 3, 4, 11, 16, 253, 0.5, 0.5, 5, 5);
-//        final ForwardCoding forwardCoding = ComponentFactory.getForward(TiePointBilinearForward.KEY);
-//        final InverseCoding inverseCoding = ComponentFactory.getInverse(TiePointInverse.KEY);
-//        final CoordinateReferenceSystem geoCRS = CRS.parseWKT(CRS_WKT);
-//        final ComponentGeoCoding sceneGeoCoding = new ComponentGeoCoding(geoRaster, forwardCoding, inverseCoding, GeoChecks.ANTIMERIDIAN, geoCRS);
-//        sceneGeoCoding.initialize();
-//        product.setSceneGeoCoding(sceneGeoCoding);
-
         productReader = (ZarrProductReader) new ZarrProductReaderPlugIn().createReaderInstance();
 
         gcAttribs = new HashMap();
-        gcAttribs.put("type", ComponentGeoCoding.class.getSimpleName());
-        final HashMap<String, Object> persistenceHolder = new HashMap<>();
-        gcAttribs.put("persistence", persistenceHolder);
 
         theGeoCodingMap = new HashMap<>();
-        persistenceHolder.put("ComponentGeoCoding", theGeoCodingMap);
+        gcAttribs.put("ComponentGeoCoding", theGeoCodingMap);
         theGeoCodingMap.put(TAG_FORWARD_CODING_KEY, TiePointBilinearForward.KEY);
         theGeoCodingMap.put(TAG_INVERSE_CODING_KEY, TiePointInverse.KEY);
         theGeoCodingMap.put(TAG_GEO_CHECKS, GeoChecks.ANTIMERIDIAN.name());
@@ -145,7 +132,7 @@ public class ZarrProductReaderTest_createGeocoding_ComponentGeoCoding {
         final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
 
         //verification
-        assertThat(getLogOutput().trim(), endsWith("create ComponentGeoCoding for TestProduct"));
+        assertThat(getLogOutput().trim(), endsWith("Try to instantiate geo coding: ComponentGeoCoding for TestProduct"));
 
         assertThat(geoCoding, is(notNullValue()));
         assertThat(geoCoding, is(instanceOf(ComponentGeoCoding.class)));
@@ -167,7 +154,7 @@ public class ZarrProductReaderTest_createGeocoding_ComponentGeoCoding {
         final GeoCoding geoCoding = productReader.createGeoCoding(product, gcAttribs);
 
         //verification
-        assertThat(getLogOutput().trim(), endsWith("create ComponentGeoCoding for TestProduct"));
+        assertThat(getLogOutput().trim(), endsWith("Try to instantiate geo coding: ComponentGeoCoding for TestProduct"));
 
         assertThat(geoCoding, is(notNullValue()));
         assertThat(geoCoding, is(instanceOf(ComponentGeoCoding.class)));
@@ -191,10 +178,14 @@ public class ZarrProductReaderTest_createGeocoding_ComponentGeoCoding {
         final ArrayList<String> orderedExpectations = new ArrayList<>();
         orderedExpectations.add(productReader.getClass().getName());
         orderedExpectations.add("createGeoCoding");
-        orderedExpectations.add("create ComponentGeoCoding for TestProduct");
+        orderedExpectations.add("Try to instantiate geo coding: ComponentGeoCoding for TestProduct");
         orderedExpectations.add("org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistenceConverter decode");
         orderedExpectations.add("Unable to find expected longitude raster 'lon' in product");
+        orderedExpectations.add("org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistenceConverter decode");
         orderedExpectations.add("Unable to create ComponentGeoCoding");
+        orderedExpectations.add(productReader.getClass().getName());
+        orderedExpectations.add("Unable to instantiate geo coding: ComponentGeoCoding");
+
 
         assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
     }
@@ -213,10 +204,13 @@ public class ZarrProductReaderTest_createGeocoding_ComponentGeoCoding {
         final ArrayList<String> orderedExpectations = new ArrayList<>();
         orderedExpectations.add(productReader.getClass().getName());
         orderedExpectations.add("createGeoCoding");
-        orderedExpectations.add("create ComponentGeoCoding for TestProduct");
+        orderedExpectations.add("Try to instantiate geo coding: ComponentGeoCoding for TestProduct");
         orderedExpectations.add("org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistenceConverter decode");
         orderedExpectations.add("Unable to find expected latitude raster 'lat' in product");
+        orderedExpectations.add("org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistenceConverter decode");
         orderedExpectations.add("Unable to create ComponentGeoCoding");
+        orderedExpectations.add(productReader.getClass().getName());
+        orderedExpectations.add("Unable to instantiate geo coding: ComponentGeoCoding");
 
         assertThat(getLogOutput(), stringContainsInOrder(orderedExpectations));
     }

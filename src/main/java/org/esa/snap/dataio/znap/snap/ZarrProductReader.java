@@ -4,17 +4,12 @@ import com.bc.ceres.core.ProgressMonitor;
 import com.bc.zarr.DataType;
 import com.bc.zarr.ZarrArray;
 import com.bc.zarr.ZarrGroup;
+import com.bc.zarr.storage.ZipStore;
 import org.esa.snap.core.dataio.AbstractProductReader;
 import org.esa.snap.core.dataio.ProductIO;
 import org.esa.snap.core.dataio.ProductReader;
 import org.esa.snap.core.dataio.ProductReaderPlugIn;
 import org.esa.snap.core.dataio.dimap.DimapProductConstants;
-import org.esa.snap.core.dataio.geocoding.ComponentFactory;
-import org.esa.snap.core.dataio.geocoding.ComponentGeoCoding;
-import org.esa.snap.core.dataio.geocoding.ForwardCoding;
-import org.esa.snap.core.dataio.geocoding.GeoChecks;
-import org.esa.snap.core.dataio.geocoding.GeoRaster;
-import org.esa.snap.core.dataio.geocoding.InverseCoding;
 import org.esa.snap.core.dataio.geometry.VectorDataNodeIO;
 import org.esa.snap.core.dataio.geometry.VectorDataNodeReader;
 import org.esa.snap.core.dataio.persistence.Item;
@@ -40,17 +35,14 @@ import org.esa.snap.core.datamodel.ProductNodeGroup;
 import org.esa.snap.core.datamodel.RasterDataNode;
 import org.esa.snap.core.datamodel.Stx;
 import org.esa.snap.core.datamodel.StxFactory;
-import org.esa.snap.core.datamodel.TiePointGeoCoding;
 import org.esa.snap.core.datamodel.TiePointGrid;
 import org.esa.snap.core.datamodel.VectorDataNode;
 import org.esa.snap.core.datamodel.VirtualBand;
 import org.esa.snap.core.image.ResolutionLevel;
-import org.esa.snap.core.util.Debug;
 import org.esa.snap.core.util.FeatureUtils;
 import org.esa.snap.core.util.StringUtils;
 import org.esa.snap.core.util.SystemUtils;
 import org.geotools.referencing.CRS;
-import org.geotools.referencing.factory.ReferencingObjectFactory;
 import org.opengis.feature.simple.SimpleFeatureType;
 import org.opengis.referencing.FactoryException;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
@@ -74,20 +66,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_FORWARD_CODING_KEY;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_GEO_CHECKS;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_GEO_CRS;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_INVERSE_CODING_KEY;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_LAT_VARIABLE_NAME;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_LON_VARIABLE_NAME;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_OFFSET_X;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_OFFSET_Y;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_RASTER_RESOLUTION_KM;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_SUBSAMPLING_X;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_SUBSAMPLING_Y;
-import static org.esa.snap.core.util.Guardian.assertEquals;
 import static org.esa.snap.core.util.Guardian.assertNotNull;
 import static org.esa.snap.core.util.Guardian.assertNotNullOrEmpty;
 import static org.esa.snap.core.util.SystemUtils.LOG;
@@ -114,6 +93,7 @@ public class ZarrProductReader extends AbstractProductReader {
 
     private final Persistence persistence = new Persistence();
     private final JsonLanguageSupport languageSupport = new JsonLanguageSupport();
+    private ZipStore zipStore;
 
     protected ZarrProductReader(ProductReaderPlugIn readerPlugIn) {
         super(readerPlugIn);
@@ -134,12 +114,21 @@ public class ZarrProductReader extends AbstractProductReader {
             binaryProducts = null;
         }
         super.close();
+        if (zipStore != null) {
+            zipStore.close();
+        }
     }
 
     @Override
     protected Product readProductNodesImpl() throws IOException {
         final Path rootPath = convertToPath(getInput());
-        final ZarrGroup rootGroup = ZarrGroup.open(rootPath);
+        final ZarrGroup rootGroup;
+        if (Files.isRegularFile(rootPath)) {
+            zipStore = new ZipStore(rootPath);
+            rootGroup = ZarrGroup.open(zipStore);
+        } else {
+            rootGroup = ZarrGroup.open(rootPath);
+        }
         final Map<String, Object> productAttributes = rootGroup.getAttributes();
 
         final String productName = (String) productAttributes.get(ATT_NAME_PRODUCT_NAME);
@@ -314,10 +303,6 @@ public class ZarrProductReader extends AbstractProductReader {
         if (gcAttribs == null) {
             return;
         }
-        if (!gcAttribs.containsKey(ATT_NAME_GEOCODING_SHARED)) {
-            gcSetter.setGeocoding(createGeoCoding(node, gcAttribs));
-            return;
-        }
         final GeoCoding geoCoding;
         if (sharedGeoCodings.containsKey(gcAttribs)) {
             geoCoding = sharedGeoCodings.get(gcAttribs);
@@ -334,127 +319,9 @@ public class ZarrProductReader extends AbstractProductReader {
 
     GeoCoding createGeoCoding(ProductNode node, Map gcAttribs) throws IOException {
         final Product product = node.getProduct();
-        final String type = (String) gcAttribs.get("type");
-        LOG.info("------------------------------------------------------------------------");
-        if (StringUtils.isNotNullAndNotEmpty(type)) {
-            LOG.info("create " + type + " for " + node.getName());
-        }
-        if (gcAttribs.containsKey("persistence")) {
-            final Map<String, Object> persistenceObj = (Map) gcAttribs.get("persistence");
-            final Item item = languageSupport.translateToItem(persistenceObj);
-            final PersistenceDecoder<GeoCoding> decoder = this.persistence.getDecoder(item);
-            if (decoder != null) {
-                GeoCoding gc = decoder.decode(item, product);
-                if (gc != null) {
-                    return gc;
-                }
-            }
-        }
-/*        if (ComponentGeoCoding.class.getSimpleName().equals(type)) {
-            try {
-                final String forwardKey = getNotEmptyString(gcAttribs, TAG_FORWARD_CODING_KEY);
-                final ForwardCoding forwardCoding = ComponentFactory.getForward(forwardKey);
-
-                final String inverseKey = getNotEmptyString(gcAttribs, TAG_INVERSE_CODING_KEY);
-                final InverseCoding inverseCoding = ComponentFactory.getInverse(inverseKey);
-
-                final String geoCheckName = getNotEmptyString(gcAttribs, TAG_GEO_CHECKS);
-                final GeoChecks geoChecks = GeoChecks.valueOf(geoCheckName);
-
-                final String geoCrsWKT = getNotEmptyString(gcAttribs, TAG_GEO_CRS);
-                final CoordinateReferenceSystem geoCRS;
-                try {
-                    geoCRS = CRS.parseWKT(geoCrsWKT);
-                } catch (FactoryException e) {
-                    throw new IllegalArgumentException("Unable to parse WKT for geoCRS", e);
-                }
-
-                final String lonVarName = getNotEmptyString(gcAttribs, TAG_LON_VARIABLE_NAME);
-                final RasterDataNode lonRaster = product.getRasterDataNode(lonVarName);
-                if (lonRaster == null) {
-                    throw new IllegalArgumentException("Longitude raster '" + lonVarName + "' expected but was null.");
-                }
-
-                final String latVarName = getNotEmptyString(gcAttribs, TAG_LAT_VARIABLE_NAME);
-                final RasterDataNode latRaster = product.getRasterDataNode(latVarName);
-                if (latRaster == null) {
-                    throw new IllegalArgumentException("Latitude raster '" + latVarName + "' expected but was null.");
-                }
-
-                final double resolution = (Double) getNotNull(gcAttribs, TAG_RASTER_RESOLUTION_KM);
-                final double offsetX = (Double) getNotNull(gcAttribs, TAG_OFFSET_X);
-                final double offsetY = (Double) getNotNull(gcAttribs, TAG_OFFSET_Y);
-                final double subsamplingX = (Double) getNotNull(gcAttribs, TAG_SUBSAMPLING_X);
-                final double subsamplingY = (Double) getNotNull(gcAttribs, TAG_SUBSAMPLING_Y);
-
-                final GeoRaster geoRaster;
-                if (lonRaster instanceof TiePointGrid) {
-                    final int sceneWidth = product.getSceneRasterWidth();
-                    final int sceneHeight = product.getSceneRasterHeight();
-                    final TiePointGrid lonTPG = (TiePointGrid) lonRaster;
-                    final TiePointGrid latTPG = (TiePointGrid) latRaster;
-
-                    final int gridWidth = lonTPG.getGridWidth();
-                    final int gridHeight = lonTPG.getGridHeight();
-
-                    final float[] lons = (float[]) lonTPG.getGridData().getElems();
-                    final double[] longitudes = IntStream.range(0, lons.length).mapToDouble(i -> lons[i]).toArray();
-
-                    final float[] lats = (float[]) latTPG.getGridData().getElems();
-                    final double[] latitudes = IntStream.range(0, lats.length).mapToDouble(i -> lats[i]).toArray();
-
-                    String text;
-
-                    text = "Longitude tie point grid offset X must be " + offsetX + " but was " + lonTPG.getOffsetX();
-                    assertEquals(text, lonTPG.getOffsetX(), offsetX);
-
-                    text = "Longitude tie point grid offset Y must be " + offsetY + " but was " + lonTPG.getOffsetY();
-                    assertEquals(text, lonTPG.getOffsetY(), offsetY);
-
-                    text = "Longitude tie point grid subsampling X must be " + subsamplingX + " but was " + lonTPG.getSubSamplingX();
-                    assertEquals(text, lonTPG.getSubSamplingX(), subsamplingX);
-
-                    text = "Longitude tie point grid subsampling Y must be " + subsamplingY + " but was " + lonTPG.getSubSamplingY();
-                    assertEquals(text, lonTPG.getSubSamplingY(), subsamplingY);
-
-                    geoRaster = new GeoRaster(longitudes, latitudes, lonVarName, latVarName, gridWidth, gridHeight,
-                                              sceneWidth, sceneHeight, resolution,
-                                              offsetX, offsetY, subsamplingX, subsamplingY);
-                } else {
-                    final int rasterWidth = lonRaster.getRasterWidth();
-                    final int rasterHeight = lonRaster.getRasterHeight();
-                    final int size = rasterWidth * rasterHeight;
-                    final double[] longitudes = lonRaster.getGeophysicalImage().getImage(0).getData()
-                            .getPixels(0, 0, rasterWidth, rasterHeight, new double[size]);
-                    final double[] latitudes = latRaster.getGeophysicalImage().getImage(0).getData()
-                            .getPixels(0, 0, rasterWidth, rasterHeight, new double[size]);
-                    geoRaster = new GeoRaster(longitudes, latitudes, lonVarName, latVarName, rasterWidth, rasterHeight,
-                                              resolution);
-                }
-
-                final ComponentGeoCoding componentGeoCoding = new ComponentGeoCoding(geoRaster, forwardCoding, inverseCoding, geoChecks, geoCRS);
-                componentGeoCoding.initialize();
-                return componentGeoCoding;
-            } catch (IllegalArgumentException e) {
-                LOG.warning(createWarning(e));
-            }
-        } else*/
-        if (TiePointGeoCoding.class.getSimpleName().equals(type)) {
-            final TiePointGrid lat = product.getTiePointGrid((String) gcAttribs.get("latGridName"));
-            final TiePointGrid lon = product.getTiePointGrid((String) gcAttribs.get("lonGridName"));
-            final String geoCRS_wkt = (String) gcAttribs.get("geoCRS_WKT");
-            if (geoCRS_wkt != null) {
-                final ReferencingObjectFactory factory = new ReferencingObjectFactory();
-                try {
-                    final CoordinateReferenceSystem geoCRS = factory.createFromWKT(geoCRS_wkt);
-                    return new TiePointGeoCoding(lat, lon, geoCRS);
-                } catch (FactoryException e) {
-                    throw new IOException("Unable to create scene geocoding.", e);
-                }
-            } else {
-                return new TiePointGeoCoding(lat, lon);
-            }
-        } else if (CrsGeoCoding.class.getSimpleName().equals(type)) {
+        if (gcAttribs.containsKey(DimapProductConstants.TAG_WKT)
+            && gcAttribs.containsKey(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM)) {
+            LOG.info("Try to instantiate " + CrsGeoCoding.class.getSimpleName() + ".");
             final int width;
             final int height;
             if (node instanceof RasterDataNode) {
@@ -483,9 +350,29 @@ public class ZarrProductReader extends AbstractProductReader {
                 Rectangle imageBounds = new Rectangle(width, height);
                 return new CrsGeoCoding(crs, imageBounds, i2m);
             } catch (FactoryException | TransformException e) {
-                Debug.trace(e);
+                LOG.log(Level.WARNING, "Unable to instantiate " + CrsGeoCoding.class.getSimpleName() + ".", e);
             }
         }
+//        final String type = (String) gcAttribs.get("type");
+        LOG.info("------------------------------------------------------------------------");
+//        if (StringUtils.isNotNullAndNotEmpty(type)) {
+//            LOG.info("create " + type + " for " + node.getName());
+//        }
+        final Item item = languageSupport.translateToItem(gcAttribs);
+        final PersistenceDecoder<GeoCoding> decoder = this.persistence.getDecoder(item);
+        if (decoder != null) {
+            LOG.info("Try to instantiate geo coding: "
+                     + item.getName()
+                     + " for " + product.getName());
+            GeoCoding gc = decoder.decode(item, product);
+            if (gc != null) {
+                return gc;
+            } else {
+                LOG.log(Level.WARNING, "Unable to instantiate geo coding: "
+                                       + item.getName());
+            }
+        }
+
         return null;
     }
 

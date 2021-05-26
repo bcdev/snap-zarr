@@ -3,17 +3,21 @@ package org.esa.snap.dataio.znap.snap;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
 import static com.bc.zarr.ZarrConstants.*;
 
+import com.bc.zarr.storage.ZipStore;
 import org.esa.snap.core.dataio.DecodeQualification;
 import org.esa.snap.core.dataio.ProductReader;
 import org.esa.snap.core.dataio.ProductReaderPlugIn;
 import org.esa.snap.core.util.io.SnapFileFilter;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -25,28 +29,45 @@ public class ZarrProductReaderPlugIn implements ProductReaderPlugIn {
         if (productRoot == null) {
             return DecodeQualification.UNABLE;
         }
-        final Path productHeader = productRoot.resolve(FILENAME_DOT_ZGROUP);
         final boolean isValidRootDirName = productRoot.getFileName().toString().toLowerCase().endsWith(SNAP_ZARR_CONTAINER_EXTENSION);
-        final boolean productRootIsDirectory = Files.isDirectory(productRoot);
-        final boolean productHeaderExist = Files.exists(productHeader);
-        final boolean productHeaderIsFile = Files.isRegularFile(productHeader);
+        if (isValidRootDirName) {
+            final boolean productRootIsDirectory = Files.isDirectory(productRoot);
+            final Path productHeader = productRoot.resolve(FILENAME_DOT_ZGROUP);
+            final boolean productHeaderExist = Files.exists(productHeader);
+            final boolean productHeaderIsFile = Files.isRegularFile(productHeader);
 
-        if (isValidRootDirName
-            && productRootIsDirectory
-            && productHeaderExist
-            && productHeaderIsFile
-        ) {
-            try {
-                final Stream<Path> stream = Files.find(productRoot, 3,
-                                                       (path, basicFileAttributes) -> Files.isRegularFile(path) && path.endsWith(FILENAME_DOT_ZARRAY),
-                                                       FileVisitOption.FOLLOW_LINKS);
-                final List<Path> pathList = stream.collect(Collectors.toList());
-                if (pathList.size() > 0) {
-                    // TODO: 23.07.2019 SE -- Frage 2 siehe Trello https://trello.com/c/HMw8CxqL/4-fragen-an-norman
-                    return DecodeQualification.INTENDED;
+            if (isValidRootDirName
+                && productRootIsDirectory
+                && productHeaderExist
+                && productHeaderIsFile
+            ) {
+                try {
+                    final Stream<Path> stream = Files.find(productRoot, 3,
+                                                           (path, basicFileAttributes) -> Files.isRegularFile(path) && path.endsWith(FILENAME_DOT_ZARRAY),
+                                                           FileVisitOption.FOLLOW_LINKS);
+                    final List<Path> pathList = stream.collect(Collectors.toList());
+                    if (pathList.size() > 0) {
+                        // TODO: 23.07.2019 SE -- Frage 2 siehe Trello https://trello.com/c/HMw8CxqL/4-fragen-an-norman
+                        return DecodeQualification.INTENDED;
+                    }
+                } catch (IOException e) {
+                    // ignore
+                }
+            }
+        }
+        final boolean isValidZnapZipArchiveName = productRoot.getFileName().toString().toLowerCase().endsWith(SNAP_ZARR_ZIP_CONTAINER_EXTENSION);
+        if (isValidZnapZipArchiveName) {
+            try (ZipStore zipStore = new ZipStore(productRoot)) {
+                final InputStream productHeaderStream = zipStore.getInputStream(FILENAME_DOT_ZGROUP);
+                final boolean productHeaderExist = productHeaderStream != null;
+                if (productHeaderExist) {
+                    final TreeSet<String> arrayKeys = zipStore.getArrayKeys();
+                    if (arrayKeys.size() > 0) {
+                        return DecodeQualification.INTENDED;
+                    }
                 }
             } catch (IOException e) {
-                // ignore
+                return DecodeQualification.UNABLE;
             }
         }
         return DecodeQualification.UNABLE;
@@ -69,7 +90,7 @@ public class ZarrProductReaderPlugIn implements ProductReaderPlugIn {
 
     @Override
     public String[] getDefaultFileExtensions() {
-        return new String[]{SNAP_ZARR_CONTAINER_EXTENSION};
+        return new String[]{SNAP_ZARR_CONTAINER_EXTENSION, SNAP_ZARR_ZIP_CONTAINER_EXTENSION};
     }
 
     @Override
@@ -80,9 +101,31 @@ public class ZarrProductReaderPlugIn implements ProductReaderPlugIn {
     @Override
     public SnapFileFilter getProductFileFilter() {
         return new SnapFileFilter(getFormatNames()[0], getDefaultFileExtensions(), getDescription(null)) {
+
             @Override
-            public FileSelectionMode getFileSelectionMode() {
-                return FileSelectionMode.DIRECTORIES_ONLY;
+            public boolean accept(File file) {
+                return isZnapZipArchive(file) || (file.isDirectory() && !isZnapRootDir(file));
+            }
+
+            @Override
+            public boolean isCompoundDocument(File dir) {
+                return isZnapRootDir(dir);
+            }
+
+            private boolean isZnapZipArchive(File file) {
+                return file.isFile() && hasZipArchiveExtension(file);
+            }
+
+            private boolean isZnapRootDir(File file) {
+                return file.isDirectory() && hasContainerExtension(file);
+            }
+
+            private boolean hasZipArchiveExtension(File file) {
+                return file.getName().endsWith(SNAP_ZARR_ZIP_CONTAINER_EXTENSION);
+            }
+
+            private boolean hasContainerExtension(File file) {
+                return file.getName().endsWith(SNAP_ZARR_CONTAINER_EXTENSION);
             }
         };
     }

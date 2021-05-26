@@ -8,14 +8,15 @@ import com.bc.zarr.CompressorFactory;
 import com.bc.zarr.DataType;
 import com.bc.zarr.ZarrArray;
 import com.bc.zarr.ZarrGroup;
+import com.bc.zarr.storage.FileSystemStore;
+import com.bc.zarr.storage.Store;
+import com.bc.zarr.storage.ZipStore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import org.esa.snap.core.dataio.AbstractProductWriter;
 import org.esa.snap.core.dataio.ProductIO;
 import org.esa.snap.core.dataio.ProductWriter;
 import org.esa.snap.core.dataio.ProductWriterPlugIn;
 import org.esa.snap.core.dataio.dimap.DimapProductConstants;
-import org.esa.snap.core.dataio.geocoding.ComponentGeoCoding;
-import org.esa.snap.core.dataio.geocoding.GeoRaster;
 import org.esa.snap.core.dataio.geometry.VectorDataNodeIO;
 import org.esa.snap.core.dataio.geometry.WriterBasedVectorDataNodeWriter;
 import org.esa.snap.core.dataio.persistence.Item;
@@ -37,51 +38,92 @@ import org.esa.snap.core.datamodel.ProductNodeGroup;
 import org.esa.snap.core.datamodel.RasterDataNode;
 import org.esa.snap.core.datamodel.SampleCoding;
 import org.esa.snap.core.datamodel.Stx;
-import org.esa.snap.core.datamodel.TiePointGeoCoding;
 import org.esa.snap.core.datamodel.TiePointGrid;
 import org.esa.snap.core.datamodel.VectorDataNode;
 import org.esa.snap.core.datamodel.VirtualBand;
 import org.esa.snap.core.util.StringUtils;
 import org.esa.snap.core.util.SystemUtils;
-import org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants;
 import org.esa.snap.runtime.Config;
-import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import ucar.ma2.InvalidRangeException;
 
-import java.awt.*;
+import java.awt.Color;
 import java.awt.geom.AffineTransform;
-import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 import java.util.prefs.Preferences;
-import java.util.stream.Collectors;
 
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_FORWARD_CODING_KEY;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_GEO_CHECKS;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_GEO_CRS;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_INVERSE_CODING_KEY;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_LAT_VARIABLE_NAME;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_LON_VARIABLE_NAME;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_OFFSET_X;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_OFFSET_Y;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_RASTER_RESOLUTION_KM;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_SUBSAMPLING_X;
-import static org.esa.snap.core.dataio.geocoding.ComponentGeoCodingPersistable.TAG_SUBSAMPLING_Y;
 import static org.esa.snap.core.util.StringUtils.isNotNullAndNotEmpty;
 import static org.esa.snap.core.util.SystemUtils.LOG;
+import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.DEFAULT_COMPRESSION_LEVEL;
+import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.DEFAULT_COMPRESSOR_ID;
+import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.DEFAULT_USE_ZIP_ARCHIVE;
+import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.PROPERTY_NAME_BINARY_FORMAT;
+import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.PROPERTY_NAME_COMPRESSION_LEVEL;
+import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.PROPERTY_NAME_COMPRESSOR_ID;
+import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.PROPERTY_NAME_USE_ZIP_ARCHIVE;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MASKS;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MEANINGS;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_VALUES;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.tryFindUnitString;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_BINARY_FORMAT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_X;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_Y;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_DESC;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_METADATA;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_NAME;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_HEIGHT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_WIDTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_TYPE;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_X;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_Y;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.BANDWIDTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.BANDWIDTH_UNIT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_PALETTE_AUTO_DISTRIBUTE;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_PALETTE_DISCRETE;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_PALETTE_NUM_COLORS;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_PALETTE_POINTS;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_RGBA;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DATASET_AUTO_GROUPING;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DISCONTINUITY;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.FLAG_DESCRIPTIONS;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.HISTOGRAM_MATCHING;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_HEIGHT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_WIDTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_X;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_Y;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IMAGE_INFO;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.LABEL;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.LOG_10_SCALED;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NO_DATA_COLOR_RGBA;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NO_DATA_VALUE_USED;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.QUICKLOOK_BAND_NAME;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SAMPLE;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SOLAR_FLUX;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SPECTRAL_BAND_INDEX;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.STATISTICS;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.UNCERTAINTY_BAND_NAME;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.UNCERTAINTY_VISUALISATION_MODE;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.UNIT_EXTENSION;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VALID_PIXEL_EXPRESSION;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VIRTUAL_BAND_EXPRESSION;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.WAVELENGTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.WAVELENGTH_UNIT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.convertToPath;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.getSnapDataType;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.metadataToJson;
 import static ucar.nc2.constants.ACDD.TIME_END;
 import static ucar.nc2.constants.ACDD.TIME_START;
 import static ucar.nc2.constants.CDM.FILL_VALUE;
@@ -93,8 +135,6 @@ import static ucar.nc2.constants.CF.UNITS;
 
 public class ZarrProductWriter extends AbstractProductWriter {
 
-    public static final String DEFAULT_COMPRESSOR_ID = "zlib";
-    public static final int DEFAULT_COMPRESSION_LEVEL = 3;
     private final HashMap<Band, BinaryWriter> zarrWriters = new HashMap<>();
     private final Compressor compressor;
     private final ProductWriterPlugIn binaryWriterPlugIn;
@@ -104,7 +144,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
     private ZarrGroup zarrGroup;
     private Path outputRoot;
-    private List<GeoCoding> sharedGeoCodings;
+    private Store zarrStore;
 
     public ZarrProductWriter(final ZarrProductWriterPlugIn productWriterPlugIn) {
         super(productWriterPlugIn);
@@ -135,6 +175,11 @@ public class ZarrProductWriter extends AbstractProductWriter {
             value.dispose();
         }
         zarrWriters.clear();
+        try {
+            zarrStore.close();
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Unable to close the zarr product writer store.", e);
+        }
     }
 
     @Override
@@ -145,9 +190,18 @@ public class ZarrProductWriter extends AbstractProductWriter {
     @Override
     protected void writeProductNodesImpl() throws IOException {
         outputRoot = convertToPath(getOutput());
+        Files.createDirectories(outputRoot.getParent());
         final Product product = getSourceProduct();
-        sharedGeoCodings = collectSharedGeoCodings(product);
-        zarrGroup = ZarrGroup.create(outputRoot, collectProductAttributes());
+        final boolean useZipArchive = getUseZipArchive();
+        if (useZipArchive) {
+            if (!outputRoot.toString().endsWith(".zip")) {
+                outputRoot = outputRoot.getParent().resolve(outputRoot.getFileName().toString() + ".zip");
+            }
+            zarrStore = new ZipStore(outputRoot);
+        } else {
+            zarrStore = new FileSystemStore(outputRoot);
+        }
+        zarrGroup = ZarrGroup.create(zarrStore, collectProductAttributes());
         writeVectorData();
         for (TiePointGrid tiePointGrid : product.getTiePointGrids()) {
             writeTiePointGrid(tiePointGrid);
@@ -163,32 +217,28 @@ public class ZarrProductWriter extends AbstractProductWriter {
     private void writeVectorData() throws IOException {
         Product product = getSourceProduct();
         ProductNodeGroup<VectorDataNode> vectorDataGroup = product.getVectorDataGroup();
-        final Path vectorDataDir = outputRoot.resolve(".vector_data");
-        if (Files.isDirectory(vectorDataDir)) {
-            final List<Path> collect = Files.list(vectorDataDir).collect(Collectors.toList());
-            for (Path path : collect) {
-                Files.delete(path);
-            }
-        }
+        zarrStore.delete(".vector_data");
 
         if (vectorDataGroup.getNodeCount() > 0) {
-            Files.createDirectories(vectorDataDir);
             for (int i = 0; i < vectorDataGroup.getNodeCount(); i++) {
                 VectorDataNode vectorDataNode = vectorDataGroup.get(i);
-                writeVectorData(vectorDataDir, vectorDataNode);
+                writeVectorData(vectorDataNode);
             }
         }
     }
 
-    void writeVectorData(Path vectorDataDir, VectorDataNode vectorDataNode) {
+    void writeVectorData(VectorDataNode vectorDataNode) {
         try {
             WriterBasedVectorDataNodeWriter vectorDataNodeWriter = new WriterBasedVectorDataNodeWriter();
-            final Path filePath = vectorDataDir.resolve(vectorDataNode.getName() + VectorDataNodeIO.FILENAME_EXTENSION);
-            try (final BufferedWriter writer = Files.newBufferedWriter(filePath)) {
+            final Path filePath = Paths.get(".vector_data").resolve(vectorDataNode.getName() + VectorDataNodeIO.FILENAME_EXTENSION);
+            try (
+                    final OutputStream os = zarrStore.getOutputStream(filePath.toString());
+                    final Writer writer = new OutputStreamWriter(os)
+            ) {
                 vectorDataNodeWriter.write(vectorDataNode, writer);
             }
         } catch (IOException e) {
-            SystemUtils.LOG.throwing("DimapProductWriter", "writeVectorData", e);
+            SystemUtils.LOG.throwing("ZarrProductWriter", "writeVectorData", e);
         }
     }
 
@@ -200,46 +250,18 @@ public class ZarrProductWriter extends AbstractProductWriter {
         return super.shouldWrite(node);
     }
 
-    static List<GeoCoding> collectSharedGeoCodings(Product product) {
-        final Map<GeoCoding, Integer> counts = new HashMap<>();
-        final GeoCoding sceneGeoCoding = product.getSceneGeoCoding();
-        if (sceneGeoCoding != null) {
-            counts.put(sceneGeoCoding, 1);
-        }
-        final List<RasterDataNode> rasterDataNodes = product.getRasterDataNodes();
-        for (RasterDataNode rasterDataNode : rasterDataNodes) {
-            final GeoCoding geoCoding = rasterDataNode.getGeoCoding();
-            if (geoCoding != null) {
-                if (counts.containsKey(geoCoding)) {
-                    int count = counts.get(geoCoding);
-                    counts.put(geoCoding, ++count);
-                } else {
-                    counts.put(geoCoding, 1);
-                }
-            }
-        }
-
-        final ArrayList<GeoCoding> sharedGeoCodings = new ArrayList<>();
-        for (GeoCoding geoCoding : counts.keySet()) {
-            int shared = counts.get(geoCoding);
-            if (shared > 1) {
-                sharedGeoCodings.add(geoCoding);
-            }
-        }
-
-        return sharedGeoCodings;
-    }
-
     Map<String, Object> collectProductAttributes() {
-        final Map<String, Object> attributes = new HashMap<>();
+        final Map<String, Object> attributes = new LinkedHashMap<>();
         collectGeneralProductAttrs(attributes);
         collectProductGeoCodingAttrs(attributes);
         // flag attributes collected per Band (Flag or Index Band). see collectSampleCodingAttributes()
         collectMaskAttrs(attributes);
+        collectProductMetadata(attributes);
         return attributes;
     }
 
     private void collectMaskAttrs(Map<String, Object> attributes) {
+        // TODO: 28.04.2021 SE -- implement or find out why stopped implementation
         final ProductNodeGroup<Mask> maskGroup = getSourceProduct().getMaskGroup();
     }
 
@@ -260,15 +282,6 @@ public class ZarrProductWriter extends AbstractProductWriter {
         addTimeAttribute(attrs, TIME_START, product.getStartTime()); // "time_coverage_start"
         addTimeAttribute(attrs, TIME_END, product.getEndTime()); // "time_coverage_end"
 
-        try {
-            final MetadataElement[] metadataElements = product.getMetadataRoot().getElements();
-            final String metadataNotPrettyPrint = metadataToJson(metadataElements);
-            attrs.put(ATT_NAME_PRODUCT_METADATA, metadataNotPrettyPrint);
-        } catch (JsonProcessingException e) {
-            // TODO: 17.02.2021 SE -- Turn this into correct exception handing.
-            e.printStackTrace();
-        }
-
         if (product.getAutoGrouping() != null) {
             attrs.put(DATASET_AUTO_GROUPING, product.getAutoGrouping().toString());
         }
@@ -277,49 +290,30 @@ public class ZarrProductWriter extends AbstractProductWriter {
         }
     }
 
+    private void collectProductMetadata(Map<String, Object> attributes) {
+        final Product product = getSourceProduct();
+        try {
+            final MetadataElement[] metadataElements = product.getMetadataRoot().getElements();
+            final String metadataNotPrettyPrint = metadataToJson(metadataElements);
+            attributes.put(ATT_NAME_PRODUCT_METADATA, metadataNotPrettyPrint);
+        } catch (JsonProcessingException e) {
+            // TODO: 17.02.2021 SE -- Turn this into correct exception handing.
+            e.printStackTrace();
+        }
+    }
+
     Map<String, Object> getGeoCodingAttributes(GeoCoding gc) {
         final HashMap<String, Object> map = new HashMap<>();
-        map.put(ATT_NAME_GEOCODING_TYPE, gc.getClass().getSimpleName());
-        if (sharedGeoCodings.contains(gc)) {
-            map.put(ATT_NAME_GEOCODING_SHARED, true);
-        }
+//        map.put(ATT_NAME_GEOCODING_TYPE, gc.getClass().getSimpleName());
+//        if (sharedGeoCodings.contains(gc)) {
+//            map.put(ATT_NAME_GEOCODING_SHARED, true);
+//        }
         final PersistenceEncoder<Object> encoder = persistence.getEncoder(gc);
         if (encoder != null) {
             final Item item = encoder.encode(gc);
-            final Map<String, Object> translation = languageSupport.translateToLanguageObject(item);
-            map.put("persistence", translation);
-            return map;
+            return languageSupport.translateToLanguageObject(item);
         }
-        /*if (gc instanceof ComponentGeoCoding) {
-
-            final ComponentGeoCoding componentGC = (ComponentGeoCoding) gc;
-
-            map.put(TAG_FORWARD_CODING_KEY, componentGC.getForwardCoding().getKey());
-            map.put(TAG_INVERSE_CODING_KEY, componentGC.getInverseCoding().getKey());
-            map.put(TAG_GEO_CHECKS, componentGC.getGeoChecks().name());
-            map.put(TAG_GEO_CRS, componentGC.getGeoCRS().toWKT().replace("\n", "").replace("\r", ""));
-
-            final GeoRaster geoRaster = componentGC.getGeoRaster();
-
-            map.put(TAG_LON_VARIABLE_NAME, geoRaster.getLonVariableName());
-            map.put(TAG_LAT_VARIABLE_NAME, geoRaster.getLatVariableName());
-            map.put(TAG_RASTER_RESOLUTION_KM, geoRaster.getRasterResolutionInKm());
-            map.put(TAG_OFFSET_X, geoRaster.getOffsetX());
-            map.put(TAG_OFFSET_Y, geoRaster.getOffsetY());
-            map.put(TAG_SUBSAMPLING_X, geoRaster.getSubsamplingX());
-            map.put(TAG_SUBSAMPLING_Y, geoRaster.getSubsamplingY());
-        } else*/
-        if (gc instanceof TiePointGeoCoding) {
-            final TiePointGeoCoding tpgc = (TiePointGeoCoding) gc;
-            final String latGridName = tpgc.getLatGrid().getName();
-            map.put("latGridName", latGridName);
-            final String lonGridName = tpgc.getLonGrid().getName();
-            map.put("lonGridName", lonGridName);
-            final CoordinateReferenceSystem geoCRS = tpgc.getGeoCRS();
-            if (geoCRS != null) {
-                map.put("geoCRS_WKT", geoCRS.toWKT());
-            }
-        } else if (gc instanceof CrsGeoCoding) {
+        if (gc instanceof CrsGeoCoding) {
             final CrsGeoCoding crsGeoCoding = (CrsGeoCoding) gc;
             final String wkt = crsGeoCoding.getMapCRS().toString().replaceAll("\n *", "").replaceAll("\r *", "");
             map.put(DimapProductConstants.TAG_WKT, wkt);
@@ -560,7 +554,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
     }
 
     private String getCompressorId() {
-        String compressorID = getPreference(ZnapPreferencesConstants.PROPERTY_NAME_COMPRESSOR_ID, DEFAULT_COMPRESSOR_ID);
+        String compressorID = getPreference(PROPERTY_NAME_COMPRESSOR_ID, DEFAULT_COMPRESSOR_ID);
         compressorID = compressorID != null ? compressorID.trim() : compressorID;
         if (!DEFAULT_COMPRESSOR_ID.equals(compressorID)) {
             LOG.info("Znap format product writer will use '" + compressorID + "' compression.");
@@ -569,7 +563,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
     }
 
     private int getCompressionLevel() {
-        final String value = getPreference(ZnapPreferencesConstants.PROPERTY_NAME_COMPRESSION_LEVEL, "" + DEFAULT_COMPRESSION_LEVEL);
+        final String value = getPreference(PROPERTY_NAME_COMPRESSION_LEVEL, "" + DEFAULT_COMPRESSION_LEVEL);
         final int compressionLevel = Integer.parseInt(value);
         if (compressionLevel != DEFAULT_COMPRESSION_LEVEL) {
             LOG.info("Znap format product writer will use " + compressionLevel + " compression level.");
@@ -577,9 +571,20 @@ public class ZarrProductWriter extends AbstractProductWriter {
         return compressionLevel;
     }
 
+    private boolean getUseZipArchive() {
+        String value = getPreference(PROPERTY_NAME_USE_ZIP_ARCHIVE, "" + DEFAULT_USE_ZIP_ARCHIVE);
+        value = value != null ? value.trim() : value;
+        final boolean useZipArchive = Boolean.parseBoolean(value);
+        if (useZipArchive != DEFAULT_USE_ZIP_ARCHIVE) {
+            final String insert = useZipArchive ? "" : "not ";
+            LOG.info("Znap format product writer will " + insert + "write into an zip archive.");
+        }
+        return useZipArchive;
+    }
+
     private ProductWriterPlugIn getBinaryWriterPlugin(ZarrProductWriterPlugIn productWriterPlugIn) {
         String defaultBinaryFormatName = productWriterPlugIn.getFormatNames()[0];
-        final String binaryFormatName = getPreference(ZnapPreferencesConstants.PROPERTY_NAME_BINARY_FORMAT, defaultBinaryFormatName);
+        final String binaryFormatName = getPreference(PROPERTY_NAME_BINARY_FORMAT, defaultBinaryFormatName);
         if (defaultBinaryFormatName.equals(binaryFormatName)) {
             return null;
         }
@@ -730,7 +735,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
     }
 
     private Map<String, Object> collectBandAttributes(Band band) {
-        final Map<String, Object> bandAttributes = new HashMap<>();
+        final Map<String, Object> bandAttributes = new LinkedHashMap<>();
         collectBandAttributes(band, bandAttributes);
         collectSampleCodingAttributes(band, bandAttributes);
         collectVirtualBandAttributes(band, bandAttributes);
@@ -739,9 +744,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
             bandAttributes.put(ATT_NAME_BINARY_FORMAT, binaryWriterPlugIn.getFormatNames()[0]);
         }
         final GeoCoding geoCoding = band.getGeoCoding();
-        if (geoCoding != band.getProduct().getSceneGeoCoding()) {
-            bandAttributes.put(ATT_NAME_GEOCODING, getGeoCodingAttributes(geoCoding));
-        }
+        bandAttributes.put(ATT_NAME_GEOCODING, getGeoCodingAttributes(geoCoding));
         return bandAttributes;
     }
 

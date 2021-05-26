@@ -28,3 +28,5 @@ target/
 
 
 /userdir/
+/src/test/java/org/esa/snap/dataio/znap/temp/
+/src/main/java/org/esa/snap/dataio/znap/temp/
