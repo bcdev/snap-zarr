@@ -60,6 +60,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.prefs.Preferences;
@@ -81,6 +82,7 @@ import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_BINAR
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_X;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_Y;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_ORIGINAL_RASTER_DATA_NODE_ORDER;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_DESC;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_METADATA;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_NAME;
@@ -256,6 +258,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
         collectProductGeoCodingAttrs(attributes);
         // flag attributes collected per Band (Flag or Index Band). see collectSampleCodingAttributes()
         collectMaskAttrs(attributes);
+        collectOriginalRasterDataNodeOrder(attributes);
         collectProductMetadata(attributes);
         return attributes;
     }
@@ -263,6 +266,15 @@ public class ZarrProductWriter extends AbstractProductWriter {
     private void collectMaskAttrs(Map<String, Object> attributes) {
         // TODO: 28.04.2021 SE -- implement or find out why stopped implementation
         final ProductNodeGroup<Mask> maskGroup = getSourceProduct().getMaskGroup();
+    }
+
+    private void collectOriginalRasterDataNodeOrder(Map<String, Object> attributes) {
+        final List<RasterDataNode> rasterDataNodes = getSourceProduct().getRasterDataNodes();
+        final List<String> names = new ArrayList<>();
+        for (RasterDataNode rasterDataNode : rasterDataNodes) {
+            names.add(rasterDataNode.getName());
+        }
+        attributes.put(ATT_NAME_ORIGINAL_RASTER_DATA_NODE_ORDER, names);
     }
 
     private void collectProductGeoCodingAttrs(Map<String, Object> attrs) {

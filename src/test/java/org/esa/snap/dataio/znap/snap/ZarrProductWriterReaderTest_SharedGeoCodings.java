@@ -14,7 +14,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING_SHARED;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
 
@@ -107,7 +106,6 @@ public class ZarrProductWriterReaderTest_SharedGeoCodings {
             if (bandOwnsGC) {
                 assertThat(attr.containsKey(ATT_NAME_GEOCODING), is(true));
                 final Map gcAttr = (Map) attr.get(ATT_NAME_GEOCODING);
-                assertThat(gcAttr.containsKey(ATT_NAME_GEOCODING_SHARED), is(false));
             }
         }
     }

@@ -69,13 +69,6 @@ final class ZnapConstantsAndUtils {
 
     public static final String NO_DATA_VALUE_USED = "no_data_value_used";
 
-    public static final String ATT_NAME_BINARY_FORMAT = ZnapPreferencesConstants.PROPERTY_NAME_BINARY_FORMAT.replace(".", "_");
-    public static final String ATT_NAME_GEOCODING = "geocoding";
-    public static final String ATT_NAME_GEOCODING_TYPE = "type";
-    public static final String ATT_NAME_GEOCODING_SHARED = "shared";
-    public static final int LON_INDEX = 0;
-    public static final int LAT_INDEX = 1;
-
     public static final String IMAGE_INFO = "image_info";
     public static final String STATISTICS = "statistics";
     public static final String COLOR_PALETTE_POINTS = "color_palette_points";
@@ -106,6 +99,9 @@ final class ZnapConstantsAndUtils {
     public static final String ATT_NAME_PRODUCT_DESC = "product_description";
     public static final String ATT_NAME_PRODUCT_SCENE_WIDTH = "product_scene_raster_width";
     public static final String ATT_NAME_PRODUCT_SCENE_HEIGHT = "product_scene_raster_height";
+    public static final String ATT_NAME_BINARY_FORMAT = ZnapPreferencesConstants.PROPERTY_NAME_BINARY_FORMAT.replace(".", "_");
+    public static final String ATT_NAME_GEOCODING = "geocoding";
+    public static final String ATT_NAME_ORIGINAL_RASTER_DATA_NODE_ORDER = "original_raster_data_node_order";
     public static final String ATT_NAME_PRODUCT_METADATA = "product_metadata";
 
     // Tie point grid attribute names

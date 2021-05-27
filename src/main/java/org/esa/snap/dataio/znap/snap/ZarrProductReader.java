@@ -155,12 +155,20 @@ public class ZarrProductReader extends AbstractProductReader {
             product.getMetadataRoot().addElement(metadataElement);
         }
 
-
+        final HashMap<String, ZarrArray> zarrArrays = new HashMap<>();
         final Set<String> arrayKeys = rootGroup.getArrayKeys();
         for (String arrayKey : arrayKeys) {
             final ZarrArray zarrArray = rootGroup.openArray(arrayKey);
             final String rasterName = getRasterName(arrayKey);
+            zarrArrays.put(rasterName, zarrArray);
+        }
 
+        final List<String> rasterDataNodeOrder = (List<String>) productAttributes.get(ATT_NAME_ORIGINAL_RASTER_DATA_NODE_ORDER);
+        for (String rasterName : rasterDataNodeOrder) {
+            if (!zarrArrays.containsKey(rasterName)) {
+                continue;
+            }
+            final ZarrArray zarrArray = zarrArrays.get(rasterName);
             final int[] shape = zarrArray.getShape();
             final int[] chunks = zarrArray.getChunks();
             final DataType zarrDataType = zarrArray.getDataType();
