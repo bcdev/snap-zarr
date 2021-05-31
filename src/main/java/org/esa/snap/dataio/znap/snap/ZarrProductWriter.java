@@ -109,6 +109,7 @@ import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_Y;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IMAGE_INFO;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.LABEL;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.LOG_10_SCALED;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NAME_MASKS;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NO_DATA_COLOR_RGBA;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NO_DATA_VALUE_USED;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.QUICKLOOK_BAND_NAME;
@@ -264,8 +265,21 @@ public class ZarrProductWriter extends AbstractProductWriter {
     }
 
     private void collectMaskAttrs(Map<String, Object> attributes) {
-        // TODO: 28.04.2021 SE -- implement or find out why stopped implementation
         final ProductNodeGroup<Mask> maskGroup = getSourceProduct().getMaskGroup();
+        final Mask[] masks = maskGroup.toArray(new Mask[0]);
+        final ArrayList encodedMasks = new ArrayList();
+        for (Mask mask : masks) {
+            final PersistenceEncoder<Mask> encoder = persistence.getEncoder(mask);
+            if (encoder == null) {
+                continue;
+            }
+            final Item encoded = encoder.encode(mask);
+            final Map<String, Object> maskEncoded = languageSupport.translateToLanguageObject(encoded);
+            encodedMasks.add(maskEncoded);
+        }
+        if (encodedMasks.size() > 0) {
+            attributes.put(NAME_MASKS, encodedMasks);
+        }
     }
 
     private void collectOriginalRasterDataNodeOrder(Map<String, Object> attributes) {

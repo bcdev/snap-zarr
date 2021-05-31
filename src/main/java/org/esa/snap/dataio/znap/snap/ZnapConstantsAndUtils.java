@@ -124,6 +124,7 @@ final class ZnapConstantsAndUtils {
             output -> ((File) output).toPath(),
             output -> Paths.get((String) output)
     };
+    public static final String NAME_MASKS = "Masks";
 
     static Path convertToPath(final Object object) {
         for (int i = 0; i < IO_TYPES.length; i++) {

@@ -25,6 +25,7 @@ import org.esa.snap.core.datamodel.GeoCoding;
 import org.esa.snap.core.datamodel.GeometryDescriptor;
 import org.esa.snap.core.datamodel.ImageInfo;
 import org.esa.snap.core.datamodel.IndexCoding;
+import org.esa.snap.core.datamodel.Mask;
 import org.esa.snap.core.datamodel.MetadataElement;
 import org.esa.snap.core.datamodel.PlacemarkDescriptor;
 import org.esa.snap.core.datamodel.PlacemarkDescriptorRegistry;
@@ -163,7 +164,7 @@ public class ZarrProductReader extends AbstractProductReader {
             zarrArrays.put(rasterName, zarrArray);
         }
 
-        final List<String> rasterDataNodeOrder = (List<String>) productAttributes.get(ATT_NAME_ORIGINAL_RASTER_DATA_NODE_ORDER);
+        final List<String> rasterDataNodeOrder = (List) productAttributes.get(ATT_NAME_ORIGINAL_RASTER_DATA_NODE_ORDER);
         for (String rasterName : rasterDataNodeOrder) {
             if (!zarrArrays.containsKey(rasterName)) {
                 continue;
@@ -237,6 +238,28 @@ public class ZarrProductReader extends AbstractProductReader {
                 }
             }
         }
+
+        final List<Map<String, Object>> masksObjectList = (List) productAttributes.get(NAME_MASKS);
+        final HashMap<String, Map<String, Object>> masksMap = new HashMap<>();
+        for (Map<String, Object> maskObj : masksObjectList) {
+            final String name = (String) ((Map)maskObj.get("Mask")).get("NAME");
+            masksMap.put(name, maskObj);
+        }
+
+        for (String rasterName : rasterDataNodeOrder) {
+            if (masksMap.containsKey(rasterName)) {
+                final Map<String, Object> mask = masksMap.get(rasterName);
+                final Item item = languageSupport.translateToItem(mask);
+                final PersistenceDecoder<Mask> decoder = persistence.getDecoder(item);
+                if (decoder != null) {
+                    final Mask decoded = decoder.decode(item, product);
+                    if (decoded != null) {
+                        product.addMask(decoded);
+                    }
+                }
+            }
+        }
+
         product.setFileLocation(rootPath.toFile());
         product.setProductReader(this);
         product.setModified(false);
@@ -245,16 +268,13 @@ public class ZarrProductReader extends AbstractProductReader {
         return product;
     }
 
-    private void readVectorData(final Product product) {
+    private void readVectorData(final Product product) throws IOException {
         final Path rootPath = convertToPath(getInput());
         final Path vectorDataDir = rootPath.resolve(".vector_data");
         if (Files.isDirectory(vectorDataDir)) {
-            try {
-                final List<Path> paths = Files.list(vectorDataDir).collect(Collectors.toList());
-                for (Path path : paths) {
-                    addVectorDataToProduct(path, product);
-                }
-            } catch (IOException e) {
+            final List<Path> paths = Files.list(vectorDataDir).collect(Collectors.toList());
+            for (Path path : paths) {
+                addVectorDataToProduct(path, product);
             }
         }
     }
