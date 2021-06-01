@@ -163,21 +163,21 @@ final class WriterPanel extends javax.swing.JPanel {
         layout.setVerticalGroup(
                 layout.createSequentialGroup()
                         .addGroup(
-                                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                layout.createParallelGroup(GroupLayout.Alignment.CENTER)
+                                        .addComponent(createZipArchiveLabel)
+                                        .addComponent(createZipArchiveCheck))
+                        .addGroup(
+                                layout.createParallelGroup(GroupLayout.Alignment.CENTER)
                                         .addComponent(binaryFormatLabel)
                                         .addComponent(binaryFormatCombo))
                         .addGroup(
-                                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                layout.createParallelGroup(GroupLayout.Alignment.CENTER)
                                         .addComponent(compressorLabel)
                                         .addComponent(compressorCombo))
                         .addGroup(
-                                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                layout.createParallelGroup(GroupLayout.Alignment.CENTER)
                                         .addComponent(compressionLevelLabel)
                                         .addComponent(compressionLevelCombo))
-                        .addGroup(
-                                layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                        .addComponent(createZipArchiveLabel)
-                                        .addComponent(createZipArchiveCheck))
                         .addGap(0, 2000, Short.MAX_VALUE)
         );
         layout.setHorizontalGroup(
@@ -212,13 +212,17 @@ final class WriterPanel extends javax.swing.JPanel {
 
     private void updateState() {
         boolean zarrFormat = binaryFormatCombo.getSelectedIndex() == 0;
-        compressorCombo.setEnabled(zarrFormat);
-        compressorLabel.setEnabled(zarrFormat);
+//        createZipArchiveLabel.setEnabled(zarrFormat);
+//        createZipArchiveCheck.setEnabled(zarrFormat);
+        final boolean noZipArchive = !createZipArchiveCheck.isSelected();
+        binaryFormatLabel.setEnabled(noZipArchive);
+        binaryFormatCombo.setEnabled(noZipArchive);
+        final boolean noArchiveAndZarrFormat = noZipArchive && zarrFormat;
+        compressorCombo.setEnabled(noArchiveAndZarrFormat);
+        compressorLabel.setEnabled(noArchiveAndZarrFormat);
         boolean zlibDefaultCompressor = compressorCombo.getSelectedIndex() == 0;
-        boolean levelEnabled = zarrFormat && zlibDefaultCompressor;
+        boolean levelEnabled = noArchiveAndZarrFormat && zlibDefaultCompressor;
         compressionLevelCombo.setEnabled(levelEnabled);
         compressionLevelLabel.setEnabled(levelEnabled);
-        createZipArchiveLabel.setEnabled(zarrFormat);
-        createZipArchiveCheck.setEnabled(zarrFormat);
     }
 }
