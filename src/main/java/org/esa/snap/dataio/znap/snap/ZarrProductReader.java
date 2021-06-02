@@ -34,6 +34,7 @@ import org.esa.snap.core.datamodel.ProductData;
 import org.esa.snap.core.datamodel.ProductNode;
 import org.esa.snap.core.datamodel.ProductNodeGroup;
 import org.esa.snap.core.datamodel.RasterDataNode;
+import org.esa.snap.core.datamodel.RasterDataNodePersistenceHelper;
 import org.esa.snap.core.datamodel.Stx;
 import org.esa.snap.core.datamodel.StxFactory;
 import org.esa.snap.core.datamodel.TiePointGrid;
@@ -239,11 +240,13 @@ public class ZarrProductReader extends AbstractProductReader {
             }
         }
 
-        final List<Map<String, Object>> masksObjectList = (List) productAttributes.get(NAME_MASKS);
         final HashMap<String, Map<String, Object>> masksMap = new HashMap<>();
-        for (Map<String, Object> maskObj : masksObjectList) {
-            final String name = (String) ((Map)maskObj.get("Mask")).get("NAME");
-            masksMap.put(name, maskObj);
+        final List<Map<String, Object>> masksObjectList = (List) productAttributes.get(NAME_MASKS);
+        if (masksObjectList != null) {
+            for (Map<String, Object> maskObj : masksObjectList) {
+                final String name = (String) ((Map)maskObj.get("Mask")).get("NAME");
+                masksMap.put(name, maskObj);
+            }
         }
 
         for (String rasterName : rasterDataNodeOrder) {
@@ -452,7 +455,7 @@ public class ZarrProductReader extends AbstractProductReader {
         throw new IllegalStateException("Data is provided by images");
     }
 
-    static void applyBandAttributes(Map<String, Object> attributes, Band band) {
+    void applyBandAttributes(Map<String, Object> attributes, Band band) {
         // TODO: 21.07.2019 SE -- units for bandwidth, wavelength, solarFlux
         if (attributes.get(BANDWIDTH) != null) {
             band.setSpectralBandwidth(((Number) attributes.get(BANDWIDTH)).floatValue());
@@ -470,7 +473,7 @@ public class ZarrProductReader extends AbstractProductReader {
         applyRasterAttributes(attributes, band);
     }
 
-    static void applyRasterAttributes(Map<String, Object> attributes, RasterDataNode rasterDataNode) {
+    void applyRasterAttributes(Map<String, Object> attributes, RasterDataNode rasterDataNode) {
         if (attributes.get(LONG_NAME) != null) {
             rasterDataNode.setDescription((String) attributes.get(LONG_NAME));
         }
@@ -492,6 +495,7 @@ public class ZarrProductReader extends AbstractProductReader {
         if (attributes.get(VALID_PIXEL_EXPRESSION) != null) {
             rasterDataNode.setValidPixelExpression((String) attributes.get(VALID_PIXEL_EXPRESSION));
         }
+        applyAncillaryElements(attributes, rasterDataNode);
         if (attributes.get(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM) != null) {
             final List matrix = (List) attributes.get(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM);
             LOG.info("matrix for band '" + rasterDataNode.getName() + "' = " + Arrays.toString(matrix.toArray()));
@@ -568,6 +572,14 @@ public class ZarrProductReader extends AbstractProductReader {
             }
             rasterDataNode.setImageInfo(imageInfo);
         }
+    }
+
+    private void applyAncillaryElements(Map<String, Object> attributes, RasterDataNode rasterDataNode) {
+        final HashMap<String, Object> root = new HashMap<>();
+        root.put("root", attributes);
+        final Item item = languageSupport.translateToItem(root);
+        RasterDataNodePersistenceHelper.setAncillaryRelations(item.asContainer(), rasterDataNode);
+        RasterDataNodePersistenceHelper.setAncillaryVariables(item.asContainer(), rasterDataNode, rasterDataNode.getProduct());
     }
 
     private static Color createColor(int[] rgba) {

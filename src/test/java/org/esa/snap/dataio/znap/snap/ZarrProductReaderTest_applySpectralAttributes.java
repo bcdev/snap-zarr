@@ -17,12 +17,14 @@ public class ZarrProductReaderTest_applySpectralAttributes {
     private Band sourceBand;
     private Map<String, Object> attributes;
     private Band targetBand;
+    private ZarrProductReader reader;
 
     @Before
     public void setUp() throws Exception {
         sourceBand = new Band("source", ProductData.TYPE_FLOAT32, 10, 10);
         targetBand = new Band("target", ProductData.TYPE_UINT8, 20, 20);
         attributes = new HashMap<>();
+        reader = new ZarrProductReader(new ZarrProductReaderPlugIn());
     }
 
     @Test
@@ -32,7 +34,7 @@ public class ZarrProductReaderTest_applySpectralAttributes {
         ZarrProductWriter.collectBandAttributes(sourceBand, attributes);
         assertThat(attributes.size(), is(2));
         //execution
-        ZarrProductReader.applyBandAttributes(attributes, targetBand);
+        reader.applyBandAttributes(attributes, targetBand);
         //verification
         assertThat(targetBand.getSpectralBandwidth(), is(123.4f));
     }
@@ -44,7 +46,7 @@ public class ZarrProductReaderTest_applySpectralAttributes {
         ZarrProductWriter.collectBandAttributes(sourceBand, attributes);
         assertThat(attributes.size(), is(2));
         //execution
-        ZarrProductReader.applyBandAttributes(attributes, targetBand);
+        reader.applyBandAttributes(attributes, targetBand);
         //verification
         assertThat(targetBand.getSpectralWavelength(), is(234.5f));
     }
@@ -56,7 +58,7 @@ public class ZarrProductReaderTest_applySpectralAttributes {
         ZarrProductWriter.collectBandAttributes(sourceBand, attributes);
         assertThat(attributes.size(), is(1));
         //execution
-        ZarrProductReader.applyBandAttributes(attributes, targetBand);
+        reader.applyBandAttributes(attributes, targetBand);
         //verification
         assertThat(targetBand.getSolarFlux(), is(24.3f));
     }
@@ -68,7 +70,7 @@ public class ZarrProductReaderTest_applySpectralAttributes {
         ZarrProductWriter.collectBandAttributes(sourceBand, attributes);
         assertThat(attributes.size(), is(1));
         //execution
-        ZarrProductReader.applyBandAttributes(attributes, targetBand);
+        reader.applyBandAttributes(attributes, targetBand);
         //verification
         assertThat(targetBand.getSpectralBandIndex(), is(24));
     }

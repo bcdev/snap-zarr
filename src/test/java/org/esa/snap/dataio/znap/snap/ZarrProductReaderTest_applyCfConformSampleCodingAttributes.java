@@ -18,12 +18,14 @@ import static org.junit.Assert.*;
 public class ZarrProductReaderTest_applyCfConformSampleCodingAttributes {
 
     private Band band;
+    private ZarrProductReader reader;
 
     @Before
     public void setUp() throws Exception {
         final Product product = new Product("PName", "PType", 1234, 2345);
         band = product.addBand("BName", ProductData.TYPE_INT32);
 
+        reader = new ZarrProductReader(new ZarrProductReaderPlugIn());
     }
 
     @Test
@@ -37,7 +39,7 @@ public class ZarrProductReaderTest_applyCfConformSampleCodingAttributes {
         attributes.put(FLAG_MASKS, Arrays.asList(m1, m2, m3));
 
         // execution
-        ZarrProductReader.applyBandAttributes(attributes, band);
+        reader.applyBandAttributes(attributes, band);
 
         // verification
         assertThat(band.isFlagBand(), is(true));
@@ -71,7 +73,7 @@ public class ZarrProductReaderTest_applyCfConformSampleCodingAttributes {
         attributes.put(FLAG_DESCRIPTIONS, Arrays.asList("d1", "d2", "d3"));
 
         // execution
-        ZarrProductReader.applyBandAttributes(attributes, band);
+        reader.applyBandAttributes(attributes, band);
 
         // verification
         assertThat(band.isFlagBand(), is(true));
@@ -106,7 +108,7 @@ public class ZarrProductReaderTest_applyCfConformSampleCodingAttributes {
         attributes.put(NAME_SAMPLE_CODING, "SCName");
 
         // execution
-        ZarrProductReader.applyBandAttributes(attributes, band);
+        reader.applyBandAttributes(attributes, band);
 
         // verification
         assertThat(band.isFlagBand(), is(true));
@@ -157,7 +159,7 @@ public class ZarrProductReaderTest_applyCfConformSampleCodingAttributes {
                                                   v3_1, v3_2, v3_3, v3_4, v3_5, v3_6, v3_7));
 
         // execution
-        ZarrProductReader.applyBandAttributes(attributes, band);
+        reader.applyBandAttributes(attributes, band);
 
         // verification
         assertThat(band.isFlagBand(), is(true));
@@ -237,7 +239,7 @@ public class ZarrProductReaderTest_applyCfConformSampleCodingAttributes {
                                                         "d3_1", "d3_2", "d3_3", "d3_4", "d3_5", "d3_6", "d3_7"));
 
         // execution
-        ZarrProductReader.applyBandAttributes(attributes, band);
+        reader.applyBandAttributes(attributes, band);
 
         // verification
         assertThat(band.isFlagBand(), is(true));
@@ -318,7 +320,7 @@ public class ZarrProductReaderTest_applyCfConformSampleCodingAttributes {
         attributes.put(NAME_SAMPLE_CODING, "SCName");
 
         // execution
-        ZarrProductReader.applyBandAttributes(attributes, band);
+        reader.applyBandAttributes(attributes, band);
 
         // verification
         assertThat(band.isFlagBand(), is(true));

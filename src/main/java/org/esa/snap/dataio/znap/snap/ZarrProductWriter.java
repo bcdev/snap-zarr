@@ -19,6 +19,7 @@ import org.esa.snap.core.dataio.ProductWriterPlugIn;
 import org.esa.snap.core.dataio.dimap.DimapProductConstants;
 import org.esa.snap.core.dataio.geometry.VectorDataNodeIO;
 import org.esa.snap.core.dataio.geometry.WriterBasedVectorDataNodeWriter;
+import org.esa.snap.core.dataio.persistence.Container;
 import org.esa.snap.core.dataio.persistence.Item;
 import org.esa.snap.core.dataio.persistence.JsonLanguageSupport;
 import org.esa.snap.core.dataio.persistence.Persistence;
@@ -36,6 +37,7 @@ import org.esa.snap.core.datamodel.ProductData;
 import org.esa.snap.core.datamodel.ProductNode;
 import org.esa.snap.core.datamodel.ProductNodeGroup;
 import org.esa.snap.core.datamodel.RasterDataNode;
+import org.esa.snap.core.datamodel.RasterDataNodePersistenceHelper;
 import org.esa.snap.core.datamodel.SampleCoding;
 import org.esa.snap.core.datamodel.Stx;
 import org.esa.snap.core.datamodel.TiePointGrid;
@@ -350,7 +352,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
         return map;
     }
 
-    static void collectRasterAttributes(RasterDataNode rdNode, Map<String, Object> attributes) {
+    void collectRasterAttributes(RasterDataNode rdNode, Map<String, Object> attributes) {
         if (rdNode.getDescription() != null) {
             attributes.put(LONG_NAME, rdNode.getDescription());
         }
@@ -366,6 +368,9 @@ public class ZarrProductWriter extends AbstractProductWriter {
         if (isNotNullAndNotEmpty(rdNode.getValidPixelExpression())) {
             attributes.put(VALID_PIXEL_EXPRESSION, rdNode.getValidPixelExpression());
         }
+
+        collectAncillaryElements(rdNode, attributes);
+
         AffineTransform imageToModelTransform = rdNode.getImageToModelTransform();
         if (!imageToModelTransform.isIdentity()) {
             final double[] matrix = new double[6];
@@ -421,6 +426,16 @@ public class ZarrProductWriter extends AbstractProductWriter {
                 infoM.put(UNCERTAINTY_VISUALISATION_MODE, mode.toString());
             }
             attributes.put(IMAGE_INFO, infoM);
+        }
+    }
+
+    private void collectAncillaryElements(RasterDataNode rdNode, Map<String, Object> attributes) {
+        final Container root = new Container("root");
+        RasterDataNodePersistenceHelper.addAncillaryElements(root, rdNode);
+        final Map<String, Map<String, Object>> rootMap = (Map) new JsonLanguageSupport().translateToLanguageObject(root);
+        final Map<String, Object> ancillaryElements = rootMap.get("root");
+        for (Map.Entry<String, Object> entry : ancillaryElements.entrySet()) {
+            attributes.put(entry.getKey(), entry.getValue());
         }
     }
 

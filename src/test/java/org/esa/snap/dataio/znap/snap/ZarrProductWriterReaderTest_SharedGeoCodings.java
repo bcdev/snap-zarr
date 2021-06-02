@@ -2,6 +2,8 @@ package org.esa.snap.dataio.znap.snap;
 
 import com.bc.zarr.ZarrGroup;
 import org.esa.snap.core.datamodel.*;
+import org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants;
+import org.esa.snap.runtime.Config;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.junit.After;
 import org.junit.Before;
@@ -11,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.prefs.Preferences;
 import java.util.stream.Collectors;
 
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING;
@@ -28,6 +31,8 @@ public class ZarrProductWriterReaderTest_SharedGeoCodings {
 
     @Before
     public void setUp() throws Exception {
+        final Preferences snap = Config.instance("snap").load().preferences();
+        snap.put(ZnapPreferencesConstants.PROPERTY_NAME_USE_ZIP_ARCHIVE, "false");
         product = new Product("test", "type", 3, 4);
         final Date start = new Date();
         final Date end = new Date(start.getTime() + 4000);
