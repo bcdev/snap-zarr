@@ -4,6 +4,8 @@ import com.bc.ceres.core.ProgressMonitor;
 import com.bc.zarr.DataType;
 import com.bc.zarr.ZarrArray;
 import com.bc.zarr.ZarrGroup;
+import com.bc.zarr.storage.FileSystemStore;
+import com.bc.zarr.storage.Store;
 import com.bc.zarr.storage.ZipStore;
 import org.esa.snap.core.dataio.AbstractProductReader;
 import org.esa.snap.core.dataio.ProductIO;
@@ -54,6 +56,7 @@ import ucar.ma2.InvalidRangeException;
 import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.StringWriter;
@@ -87,6 +90,8 @@ import static ucar.nc2.constants.CF.UNITS;
 
 public class ZarrProductReader extends AbstractProductReader {
 
+    private static final String VECTOR_DATA_DIR = ".vector_data";
+
     private ProductReaderPlugIn binaryReaderPlugIn;
     private String binaryFileExtension;
     private HashMap<DataNode, Product> binaryProducts;
@@ -95,7 +100,7 @@ public class ZarrProductReader extends AbstractProductReader {
 
     private final Persistence persistence = new Persistence();
     private final JsonLanguageSupport languageSupport = new JsonLanguageSupport();
-    private ZipStore zipStore;
+    private Store store;
 
     protected ZarrProductReader(ProductReaderPlugIn readerPlugIn) {
         super(readerPlugIn);
@@ -116,21 +121,20 @@ public class ZarrProductReader extends AbstractProductReader {
             binaryProducts = null;
         }
         super.close();
-        if (zipStore != null) {
-            zipStore.close();
+        if (store != null) {
+            store.close();
         }
     }
 
     @Override
     protected Product readProductNodesImpl() throws IOException {
         final Path rootPath = convertToPath(getInput());
-        final ZarrGroup rootGroup;
         if (Files.isRegularFile(rootPath)) {
-            zipStore = new ZipStore(rootPath);
-            rootGroup = ZarrGroup.open(zipStore);
+            store = new ZipStore(rootPath);
         } else {
-            rootGroup = ZarrGroup.open(rootPath);
+            store = new FileSystemStore(rootPath);
         }
+        final ZarrGroup rootGroup = ZarrGroup.open(store);
         final Map<String, Object> productAttributes = rootGroup.getAttributes();
 
         final String productName = (String) productAttributes.get(ATT_NAME_PRODUCT_NAME);
@@ -244,20 +248,25 @@ public class ZarrProductReader extends AbstractProductReader {
         final List<Map<String, Object>> masksObjectList = (List) productAttributes.get(NAME_MASKS);
         if (masksObjectList != null) {
             for (Map<String, Object> maskObj : masksObjectList) {
-                final String name = (String) ((Map)maskObj.get("Mask")).get("NAME");
+                final String name = (String) ((Map) maskObj.get("Mask")).get("NAME");
                 masksMap.put(name, maskObj);
             }
         }
 
         for (String rasterName : rasterDataNodeOrder) {
             if (masksMap.containsKey(rasterName)) {
-                final Map<String, Object> mask = masksMap.get(rasterName);
-                final Item item = languageSupport.translateToItem(mask);
+                final Map<String, Object> maskMap = masksMap.get(rasterName);
+                final Item item = languageSupport.translateToItem(maskMap);
                 final PersistenceDecoder<Mask> decoder = persistence.getDecoder(item);
                 if (decoder != null) {
-                    final Mask decoded = decoder.decode(item, product);
-                    if (decoded != null) {
-                        product.addMask(decoded);
+                    final Mask mask = decoder.decode(item, product);
+                    final String maskName = mask.getName();
+                    if (mask != null) {
+                        final ProductNodeGroup<Mask> maskGroup = product.getMaskGroup();
+                        if (maskGroup.contains(maskName)) {
+                            maskGroup.remove(maskGroup.get(maskName));
+                        }
+                        maskGroup.add(mask);
                     }
                 }
             }
@@ -272,19 +281,16 @@ public class ZarrProductReader extends AbstractProductReader {
     }
 
     private void readVectorData(final Product product) throws IOException {
-        final Path rootPath = convertToPath(getInput());
-        final Path vectorDataDir = rootPath.resolve(".vector_data");
-        if (Files.isDirectory(vectorDataDir)) {
-            final List<Path> paths = Files.list(vectorDataDir).collect(Collectors.toList());
-            for (Path path : paths) {
-                addVectorDataToProduct(path, product);
-            }
+        final List<String> keys = store.getKeysEndingWith(VectorDataNodeIO.FILENAME_EXTENSION).stream()
+                .filter(s -> s.startsWith(VECTOR_DATA_DIR)).collect(Collectors.toList());
+        for (String key : keys) {
+            addVectorDataToProduct(key, product);
         }
     }
 
-    private void addVectorDataToProduct(Path vectorFilePath, final Product product) {
+    private void addVectorDataToProduct(String key, final Product product) {
         final CoordinateReferenceSystem sceneCRS = product.getSceneCRS();
-        try (Reader reader = Files.newBufferedReader(vectorFilePath)) {
+        try (Reader reader = new InputStreamReader(store.getInputStream(key))) {
             FeatureUtils.FeatureCrsProvider crsProvider = new FeatureUtils.FeatureCrsProvider() {
                 @Override
                 public CoordinateReferenceSystem getFeatureCrs(Product product) {
@@ -297,7 +303,8 @@ public class ZarrProductReader extends AbstractProductReader {
                 }
             };
             OptimalPlacemarkDescriptorProvider descriptorProvider = new OptimalPlacemarkDescriptorProvider();
-            final String name = vectorFilePath.getFileName().toString();
+
+            final String name = key.replaceAll("/", "").replace(VECTOR_DATA_DIR, "");
             VectorDataNode vectorDataNode = VectorDataNodeReader.read(name, reader, product,
                                                                       crsProvider, descriptorProvider, sceneCRS,
                                                                       VectorDataNodeIO.DEFAULT_DELIMITER_CHAR,
@@ -311,7 +318,7 @@ public class ZarrProductReader extends AbstractProductReader {
                 vectorDataGroup.add(vectorDataNode);
             }
         } catch (IOException e) {
-            SystemUtils.LOG.log(Level.SEVERE, "Error reading '" + vectorFilePath + "'", e);
+            SystemUtils.LOG.log(Level.SEVERE, "Error reading '" + key + "'", e);
         }
     }
 
