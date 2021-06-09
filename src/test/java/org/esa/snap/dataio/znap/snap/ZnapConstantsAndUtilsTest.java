@@ -1,15 +1,20 @@
 package org.esa.snap.dataio.znap.snap;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import org.esa.snap.core.datamodel.MetadataAttribute;
 import org.esa.snap.core.datamodel.MetadataElement;
 import org.esa.snap.core.datamodel.ProductData;
 import org.junit.Test;
 
+import java.util.List;
+import java.util.Map;
+
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.jsonToMetadata;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.metadataToJson;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
+
+import static org.assertj.core.api.Assertions.*;
 
 public class ZnapConstantsAndUtilsTest {
 
@@ -41,7 +46,7 @@ public class ZnapConstantsAndUtilsTest {
         final String json = metadataToJson(elements);
         final MetadataElement[] readElements = jsonToMetadata(json);
 
-        assertThat(readElements.length, is(elements.length));
+        assertThat(readElements.length).isEqualTo(elements.length);
         for (int i = 0; i < elements.length; i++) {
             MetadataElement e1 = readElements[i];
             MetadataElement e2 = elements[i];
@@ -50,9 +55,9 @@ public class ZnapConstantsAndUtilsTest {
     }
 
     private void equalMetadateElements(MetadataElement e1, MetadataElement e2) {
-        assertThat(e1.getName(), is(equalTo(e2.getName())));
-        assertThat(e1.getDescription(), is(equalTo(e2.getDescription())));
-        assertThat(e1.getNumElements(), is(equalTo(e2.getNumElements())));
+        assertThat(e1.getName()).isEqualTo(e2.getName());
+        assertThat(e1.getDescription()).isEqualTo(e2.getDescription());
+        assertThat(e1.getNumElements()).isEqualTo(e2.getNumElements());
         final MetadataElement[] elements1 = e1.getElements();
         final MetadataElement[] elements2 = e2.getElements();
         for (int i = 0; i < elements2.length; i++) {
@@ -60,18 +65,40 @@ public class ZnapConstantsAndUtilsTest {
             MetadataElement v2 = elements2[i];
             equalMetadateElements(v1, v2);
         }
-        assertThat(e1.getNumAttributes(), is(equalTo(e2.getNumAttributes())));
+        assertThat(e1.getNumAttributes()).isEqualTo(e2.getNumAttributes());
         final MetadataAttribute[] attributes1 = e1.getAttributes();
         final MetadataAttribute[] attributes2 = e2.getAttributes();
         for (int i = 0; i < attributes2.length; i++) {
             MetadataAttribute a1 = attributes1[i];
             MetadataAttribute a2 = attributes2[i];
-            assertThat(a1.getName(), is(equalTo(a2.getName())));
-            assertThat(a1.getDescription(), is(equalTo(a2.getDescription())));
-            assertThat(a1.getUnit(), is(equalTo(a2.getUnit())));
-            assertThat(a1.getDataType(), is(equalTo(a2.getDataType())));
-            assertThat(a1.getNumDataElems(), is(equalTo(a2.getNumDataElems())));
-            assertThat(a1.getData().getElems(), is(equalTo(a2.getData().getElems())));
+            assertThat(a1.getName()).isEqualTo(a2.getName());
+            assertThat(a1.getDescription()).isEqualTo(a2.getDescription());
+            assertThat(a1.getUnit()).isEqualTo(a2.getUnit());
+            assertThat(a1.getDataType()).isEqualTo(a2.getDataType());
+            assertThat(a1.getNumDataElems()).isEqualTo(a2.getNumDataElems());
+            assertThat(a1.getData().getElems()).isEqualTo(a2.getData().getElems());
         }
+    }
+
+    @Test
+    public void testThatMetadataCanBeConvertedToListAndReturn() throws JsonProcessingException {
+        //preparation
+        final MetadataElement elem = new MetadataElement("elem");
+        elem.addAttribute(new MetadataAttribute("Aname", ProductData.createInstance(new int[]{1, 2, 3, 4}), false));
+        final MetadataElement elem2 = new MetadataElement("elem2");
+        elem2.addAttribute(new MetadataAttribute("desc", new ProductData.ASCII("A short description"), true));
+        final MetadataElement[] elements = {elem, elem2};
+
+        //execution
+        final List<Map<String, Object>> list = ZnapConstantsAndUtils.metadataToList(elements);
+        final MetadataElement[] convertedElems = ZnapConstantsAndUtils.listToMetadata(list);
+
+        //verification
+        final ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(ZnapConstantsAndUtils.metadataModule);
+        final ObjectWriter ppWriter = objectMapper.writerWithDefaultPrettyPrinter();
+        final String elemsJSON = ppWriter.writeValueAsString(elements);
+        final String converted = ppWriter.writeValueAsString(convertedElems);
+        assertThat(converted).isEqualTo(elemsJSON);
     }
 }

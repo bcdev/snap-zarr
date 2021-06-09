@@ -1,6 +1,7 @@
 package org.esa.snap.dataio.znap.snap;
 
 import org.esa.snap.TestHelper;
+import org.esa.snap.core.dataio.ProductIOException;
 import org.esa.snap.core.datamodel.Mask;
 import org.esa.snap.core.datamodel.Product;
 import org.esa.snap.core.datamodel.TiePointGrid;
@@ -33,7 +34,7 @@ public class ZarrProductWriterTest_collectOriginalRasterDataNodeOrder {
     }
 
     @Test
-    public void testThatProductAttributesContainAttribute_OriginalRasterDataNodeOrder() throws NoSuchFieldException, IllegalAccessException {
+    public void testThatProductAttributesContainAttribute_OriginalRasterDataNodeOrder() throws NoSuchFieldException, IllegalAccessException, ProductIOException {
         //preparation
         final ZarrProductWriter writer = new ZarrProductWriter(new ZarrProductWriterPlugIn());
         TestHelper.setPrivateFieldObject(writer, "_sourceProduct", product);

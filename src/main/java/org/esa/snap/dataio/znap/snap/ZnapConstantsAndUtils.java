@@ -22,6 +22,7 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.ObjectCodec;
 import com.fasterxml.jackson.core.Version;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -44,6 +45,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 final class ZnapConstantsAndUtils {
 
@@ -162,7 +165,7 @@ final class ZnapConstantsAndUtils {
         }
     }
 
-    private static final SimpleModule metadataModule;
+    static final SimpleModule metadataModule;
 
     static {
 
@@ -348,6 +351,22 @@ final class ZnapConstantsAndUtils {
         objectMapper.registerModule(metadataModule);
 //        return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(metadata);
         return objectMapper.writeValueAsString(metadata);
+    }
+
+    public static MetadataElement[] listToMetadata(List<Map<String, Object>> list) throws JsonProcessingException {
+        final ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(metadataModule);
+        final String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(list);
+        return objectMapper.readValue(json, MetadataElement[].class);
+    }
+
+    public static List<Map<String, Object>> metadataToList(MetadataElement[] metadata) throws JsonProcessingException {
+        final ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(metadataModule);
+        final String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(metadata);
+        TypeReference<List<Map<String, Object>>> typeRef
+                = new TypeReference<List<Map<String, Object>>>() {};
+        return objectMapper.readValue(json, typeRef);
     }
 
     private static void writeNonEmptyStringField(JsonGenerator gen, String fieldName, String string) throws IOException {

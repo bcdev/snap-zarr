@@ -101,6 +101,7 @@ public class ZarrProductReader extends AbstractProductReader {
     private final Persistence persistence = new Persistence();
     private final JsonLanguageSupport languageSupport = new JsonLanguageSupport();
     private Store store;
+    private Product product;
 
     protected ZarrProductReader(ProductReaderPlugIn readerPlugIn) {
         super(readerPlugIn);
@@ -142,12 +143,11 @@ public class ZarrProductReader extends AbstractProductReader {
         final String productDesc = (String) productAttributes.get(ATT_NAME_PRODUCT_DESC);
         final ProductData.UTC sensingStart = getTime(productAttributes, TIME_START, rootPath); // "time_coverage_start"
         final ProductData.UTC sensingStop = getTime(productAttributes, TIME_END, rootPath); // "time_coverage_end"
-        final String product_metadata = (String) productAttributes.get(ATT_NAME_PRODUCT_METADATA);
-//        final ArrayList<MetadataElement> metadataElements = toMetadataElements(product_metadata);
-        final MetadataElement[] metadataElements = jsonToMetadata(product_metadata);
+        final List<Map<String, Object>> product_metadata = (List<Map<String, Object>>) productAttributes.get(ATT_NAME_PRODUCT_METADATA);
+        final MetadataElement[] metadataElements = listToMetadata(product_metadata);
         final int sceneRasterWidth = ((Number) productAttributes.get(ATT_NAME_PRODUCT_SCENE_WIDTH)).intValue();
         final int sceneRasterHeight = ((Number) productAttributes.get(ATT_NAME_PRODUCT_SCENE_HEIGHT)).intValue();
-        final Product product = new Product(productName, productType, sceneRasterWidth, sceneRasterHeight, this);
+        product = new Product(productName, productType, sceneRasterWidth, sceneRasterHeight, this);
         product.setDescription(productDesc);
         product.setStartTime(sensingStart);
         product.setEndTime(sensingStop);
@@ -275,26 +275,31 @@ public class ZarrProductReader extends AbstractProductReader {
         product.setFileLocation(rootPath.toFile());
         product.setProductReader(this);
         product.setModified(false);
-        addGeocodings(productAttributes, product);
-        readVectorData(product);
+        addGeocodings(productAttributes);
+        readVectorData();
         return product;
     }
 
-    private void readVectorData(final Product product) throws IOException {
+    private void readVectorData() throws IOException {
         final List<String> keys = store.getKeysEndingWith(VectorDataNodeIO.FILENAME_EXTENSION).stream()
                 .filter(s -> s.startsWith(VECTOR_DATA_DIR)).collect(Collectors.toList());
         for (String key : keys) {
-            addVectorDataToProduct(key, product);
+            addVectorDataToProduct(key);
         }
     }
 
-    private void addVectorDataToProduct(String key, final Product product) {
-        final CoordinateReferenceSystem sceneCRS = product.getSceneCRS();
+    private void addVectorDataToProduct(String key) {
+        final CoordinateReferenceSystem modelCRS;
+        if (key.toLowerCase().contains("ground_control_points")) {
+            modelCRS = Product.DEFAULT_IMAGE_CRS;
+        } else {
+            modelCRS = product.getSceneCRS();
+        }
         try (Reader reader = new InputStreamReader(store.getInputStream(key))) {
             FeatureUtils.FeatureCrsProvider crsProvider = new FeatureUtils.FeatureCrsProvider() {
                 @Override
                 public CoordinateReferenceSystem getFeatureCrs(Product product) {
-                    return sceneCRS;
+                    return modelCRS;
                 }
 
                 @Override
@@ -303,10 +308,9 @@ public class ZarrProductReader extends AbstractProductReader {
                 }
             };
             OptimalPlacemarkDescriptorProvider descriptorProvider = new OptimalPlacemarkDescriptorProvider();
-
-            final String name = key.replaceAll("/", "").replace(VECTOR_DATA_DIR, "");
+            final String name = key.substring(key.lastIndexOf("/") + 1);
             VectorDataNode vectorDataNode = VectorDataNodeReader.read(name, reader, product,
-                                                                      crsProvider, descriptorProvider, sceneCRS,
+                                                                      crsProvider, descriptorProvider, modelCRS,
                                                                       VectorDataNodeIO.DEFAULT_DELIMITER_CHAR,
                                                                       ProgressMonitor.NULL);
             if (vectorDataNode != null) {
@@ -322,7 +326,7 @@ public class ZarrProductReader extends AbstractProductReader {
         }
     }
 
-    private void addGeocodings(Map<String, Object> productAttributes, Product product) throws IOException {
+    private void addGeocodings(Map<String, Object> productAttributes) throws IOException {
         addGeoCoding(product, productAttributes, product::setSceneGeoCoding);
         final List<RasterDataNode> rasterDataNodes = product.getRasterDataNodes();
         for (RasterDataNode rasterDataNode : rasterDataNodes) {
