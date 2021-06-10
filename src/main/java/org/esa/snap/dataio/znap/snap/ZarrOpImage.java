@@ -1,4 +1,3 @@
-
 /*
  * Copyright (C) 2010 Brockmann Consult GmbH (info@brockmann-consult.de)
  *
@@ -31,7 +30,6 @@ import java.awt.Dimension;
 import java.awt.Rectangle;
 import java.awt.image.WritableRaster;
 import java.io.IOException;
-
 
 /**
  * A base class for {@code OpImage}s acting as source image for

@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2021.  Brockmann Consult GmbH (info@brockmann-consult.de)
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see http://www.gnu.org/licenses/
+ */
+
 package org.esa.snap.dataio.znap.snap;
 
 import org.esa.snap.core.datamodel.Band;
@@ -10,8 +26,11 @@ import org.junit.Test;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
-import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
+import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MASKS;
+import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MEANINGS;
+import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_VALUES;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.FLAG_DESCRIPTIONS;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NAME_SAMPLE_CODING;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
 

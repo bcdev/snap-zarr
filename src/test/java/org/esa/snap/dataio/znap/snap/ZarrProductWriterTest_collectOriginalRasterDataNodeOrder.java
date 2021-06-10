@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2021.  Brockmann Consult GmbH (info@brockmann-consult.de)
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see http://www.gnu.org/licenses/
+ */
+
 package org.esa.snap.dataio.znap.snap;
 
 import org.esa.snap.TestHelper;
@@ -13,6 +29,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_ORIGINAL_RASTER_DATA_NODE_ORDER;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.cast;
 
 public class ZarrProductWriterTest_collectOriginalRasterDataNodeOrder {
 
@@ -46,7 +63,7 @@ public class ZarrProductWriterTest_collectOriginalRasterDataNodeOrder {
         assertThat(attributes).containsKey(ZnapConstantsAndUtils.ATT_NAME_ORIGINAL_RASTER_DATA_NODE_ORDER);
         final Object value = attributes.get(ATT_NAME_ORIGINAL_RASTER_DATA_NODE_ORDER);
         assertThat(value).isNotNull().isInstanceOf(List.class);
-        final List list = (List) value;
+        final List<String> list = cast(value);
         assertThat(list).containsExactly("There","is","only","one","truly","correct","raster","data","node","order");
     }
 

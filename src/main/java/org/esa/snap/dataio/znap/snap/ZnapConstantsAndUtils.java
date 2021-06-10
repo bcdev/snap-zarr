@@ -1,19 +1,19 @@
 /*
- * $Id$
- *
- * Copyright (C) 2010 by Brockmann Consult (info@brockmann-consult.de)
+ * Copyright (c) 2021.  Brockmann Consult GmbH (info@brockmann-consult.de)
  *
  * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation. This program is distributed in the hope it will
- * be useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the GNU General Public License for more details.
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see http://www.gnu.org/licenses/
  */
+
 package org.esa.snap.dataio.znap.snap;
 
 import com.bc.zarr.DataType;
@@ -44,7 +44,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -116,7 +115,7 @@ final class ZnapConstantsAndUtils {
     // Sample Coding
     public static final String NAME_SAMPLE_CODING = "name_sample_coding";
 
-    static final Class[] IO_TYPES = new Class[]{
+    static final Class<?>[] IO_TYPES = new Class[]{
             Path.class,
             File.class,
             String.class
@@ -198,7 +197,7 @@ final class ZnapConstantsAndUtils {
         };
         final StdDeserializer<?> metadataElementStdDeserializer = new StdDeserializer<MetadataElement>(MetadataElement.class) {
             @Override
-            public MetadataElement deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JsonProcessingException {
+            public MetadataElement deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
                 final ObjectCodec codec = p.getCodec();
                 final JsonNode node = codec.readTree(p);
                 final String name = node.get("name").asText();
@@ -208,9 +207,7 @@ final class ZnapConstantsAndUtils {
                 }
                 if (node.has("attributes")) {
                     final ArrayNode attributes = node.withArray("attributes");
-                    final Iterator<JsonNode> iterator = attributes.iterator();
-                    while (iterator.hasNext()) {
-                        JsonNode next = iterator.next();
+                    for (JsonNode next : attributes) {
                         if (!next.isObject()) {
                             throw new IllegalStateException("Object expected!");
                         }
@@ -220,9 +217,7 @@ final class ZnapConstantsAndUtils {
                 }
                 if (node.has("elements")) {
                     final ArrayNode elements = node.withArray("elements");
-                    final Iterator<JsonNode> iterator = elements.iterator();
-                    while (iterator.hasNext()) {
-                        JsonNode next = iterator.next();
+                    for (JsonNode next : elements) {
                         if (!next.isObject()) {
                             throw new IllegalStateException("Object expected!");
                         }
@@ -249,7 +244,7 @@ final class ZnapConstantsAndUtils {
         };
         final StdDeserializer<MetadataAttribute> metadataAttributeStdDeserializer = new StdDeserializer<MetadataAttribute>(MetadataAttribute.class) {
             @Override
-            public MetadataAttribute deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JsonProcessingException {
+            public MetadataAttribute deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
                 final ObjectCodec codec = p.getCodec();
                 final JsonNode node = codec.readTree(p);
                 final String name = node.get("name").asText();
@@ -289,7 +284,7 @@ final class ZnapConstantsAndUtils {
         };
         final StdDeserializer<ProductData> productDataStdDeserializer = new StdDeserializer<ProductData>(ProductData.class) {
             @Override
-            public ProductData deserialize(JsonParser parser, DeserializationContext ctxt) throws IOException, JsonProcessingException {
+            public ProductData deserialize(JsonParser parser, DeserializationContext ctxt) throws IOException {
                 ObjectCodec codec = parser.getCodec();
                 JsonNode node = codec.readTree(parser);
 
@@ -353,10 +348,10 @@ final class ZnapConstantsAndUtils {
         return objectMapper.writeValueAsString(metadata);
     }
 
-    public static MetadataElement[] listToMetadata(List<Map<String, Object>> list) throws JsonProcessingException {
+    public static MetadataElement[] listToMetadata(List<?> metadata) throws JsonProcessingException {
         final ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(metadataModule);
-        final String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(list);
+        final String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(metadata);
         return objectMapper.readValue(json, MetadataElement[].class);
     }
 
@@ -373,5 +368,10 @@ final class ZnapConstantsAndUtils {
         if (string != null && string.trim().length() > 0) {
             gen.writeStringField(fieldName, string.trim());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> T cast(Object o) {
+        return (T) o;
     }
 }

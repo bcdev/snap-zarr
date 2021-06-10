@@ -67,7 +67,7 @@ Tag <Spectral_Band_Info> from BEAM-DIMAP
 ///////////////////////////////////////////////////////////////////////
 
     BAND_INDEX
-        ---> Nicht verwechseln mit spectral band index !
+        ---> Do not confuse with the spectral band index !
 
 
     private void writeAncillaryInformation(RasterDataNode rasterDataNode, int indent) {

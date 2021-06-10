@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2021.  Brockmann Consult GmbH (info@brockmann-consult.de)
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see http://www.gnu.org/licenses/
+ */
+
 package org.esa.snap.dataio.znap.snap;
 
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
@@ -36,11 +52,7 @@ public class ZarrProductReaderPlugIn implements ProductReaderPlugIn {
             final boolean productHeaderExist = Files.exists(productHeader);
             final boolean productHeaderIsFile = Files.isRegularFile(productHeader);
 
-            if (isValidRootDirName
-                && productRootIsDirectory
-                && productHeaderExist
-                && productHeaderIsFile
-            ) {
+            if (productRootIsDirectory && productHeaderExist && productHeaderIsFile) {
                 try {
                     final Stream<Path> stream = Files.find(productRoot, 3,
                                                            (path, basicFileAttributes) -> Files.isRegularFile(path) && path.endsWith(FILENAME_DOT_ZARRAY),
@@ -74,7 +86,7 @@ public class ZarrProductReaderPlugIn implements ProductReaderPlugIn {
     }
 
     @Override
-    public Class[] getInputTypes() {
+    public Class<?>[] getInputTypes() {
         return IO_TYPES;
     }
 

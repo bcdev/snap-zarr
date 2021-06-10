@@ -1,5 +1,4 @@
 /*
- *
  * Copyright (c) 2021.  Brockmann Consult GmbH (info@brockmann-consult.de)
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -13,7 +12,6 @@
  *
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, see http://www.gnu.org/licenses/
- *
  */
 
 package org.esa.snap.dataio.znap.snap;
@@ -31,7 +29,6 @@ import java.io.StringWriter;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
-
 
 public class VectorDataNodeWriterTest {
 

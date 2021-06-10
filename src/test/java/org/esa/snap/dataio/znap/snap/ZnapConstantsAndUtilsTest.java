@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2021.  Brockmann Consult GmbH (info@brockmann-consult.de)
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see http://www.gnu.org/licenses/
+ */
+
 package org.esa.snap.dataio.znap.snap;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -11,10 +27,9 @@ import org.junit.Test;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.jsonToMetadata;
 import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.metadataToJson;
-
-import static org.assertj.core.api.Assertions.*;
 
 public class ZnapConstantsAndUtilsTest {
 
@@ -50,11 +65,11 @@ public class ZnapConstantsAndUtilsTest {
         for (int i = 0; i < elements.length; i++) {
             MetadataElement e1 = readElements[i];
             MetadataElement e2 = elements[i];
-            equalMetadateElements(e1, e2);
+            equalMetadataElements(e1, e2);
         }
     }
 
-    private void equalMetadateElements(MetadataElement e1, MetadataElement e2) {
+    private void equalMetadataElements(MetadataElement e1, MetadataElement e2) {
         assertThat(e1.getName()).isEqualTo(e2.getName());
         assertThat(e1.getDescription()).isEqualTo(e2.getDescription());
         assertThat(e1.getNumElements()).isEqualTo(e2.getNumElements());
@@ -63,7 +78,7 @@ public class ZnapConstantsAndUtilsTest {
         for (int i = 0; i < elements2.length; i++) {
             MetadataElement v1 = elements1[i];
             MetadataElement v2 = elements2[i];
-            equalMetadateElements(v1, v2);
+            equalMetadataElements(v1, v2);
         }
         assertThat(e1.getNumAttributes()).isEqualTo(e2.getNumAttributes());
         final MetadataAttribute[] attributes1 = e1.getAttributes();

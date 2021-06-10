@@ -1,9 +1,25 @@
+/*
+ * Copyright (c) 2021.  Brockmann Consult GmbH (info@brockmann-consult.de)
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see http://www.gnu.org/licenses/
+ */
+
 package org.esa.snap.dataio.znap.snap;
 
 import org.junit.Before;
 import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class ZarrProductWriterTest_DimensionNameGenerator {
 
@@ -28,7 +44,7 @@ public class ZarrProductWriterTest_DimensionNameGenerator {
     }
 
     @Test
-    public void testThatEachDimesionStartsWithoutNumberExtension() {
+    public void testThatEachDimensionStartsWithoutNumberExtension() {
         assertThat(generator.getDimensionNameFor("a", 22)).isEqualTo("a");
         assertThat(generator.getDimensionNameFor("b", 22)).isEqualTo("b");
         assertThat(generator.getDimensionNameFor("c", 22)).isEqualTo("c");
@@ -36,7 +52,7 @@ public class ZarrProductWriterTest_DimensionNameGenerator {
     }
 
     @Test
-    public void testThatEachDimesionWithTheSameNameButDifferentSizeBecomesANumberExtendedName() {
+    public void testThatEachDimensionWithTheSameNameButDifferentSizeBecomesANumberExtendedName() {
         generator.getDimensionNameFor("a", 22);
         generator.getDimensionNameFor("b", 22);
         generator.getDimensionNameFor("c", 22);

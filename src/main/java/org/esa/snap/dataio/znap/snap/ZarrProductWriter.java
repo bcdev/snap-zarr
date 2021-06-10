@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2021.  Brockmann Consult GmbH (info@brockmann-consult.de)
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see http://www.gnu.org/licenses/
+ */
+
 package org.esa.snap.dataio.znap.snap;
 
 import com.bc.ceres.core.ProgressMonitor;
@@ -20,30 +36,8 @@ import org.esa.snap.core.dataio.ProductWriterPlugIn;
 import org.esa.snap.core.dataio.dimap.DimapProductConstants;
 import org.esa.snap.core.dataio.geometry.VectorDataNodeIO;
 import org.esa.snap.core.dataio.geometry.WriterBasedVectorDataNodeWriter;
-import org.esa.snap.core.dataio.persistence.Container;
-import org.esa.snap.core.dataio.persistence.Item;
-import org.esa.snap.core.dataio.persistence.JsonLanguageSupport;
-import org.esa.snap.core.dataio.persistence.Persistence;
-import org.esa.snap.core.dataio.persistence.PersistenceEncoder;
-import org.esa.snap.core.datamodel.Band;
-import org.esa.snap.core.datamodel.ColorPaletteDef;
-import org.esa.snap.core.datamodel.CrsGeoCoding;
-import org.esa.snap.core.datamodel.GeoCoding;
-import org.esa.snap.core.datamodel.ImageInfo;
-import org.esa.snap.core.datamodel.Mask;
-import org.esa.snap.core.datamodel.MetadataAttribute;
-import org.esa.snap.core.datamodel.MetadataElement;
-import org.esa.snap.core.datamodel.Product;
-import org.esa.snap.core.datamodel.ProductData;
-import org.esa.snap.core.datamodel.ProductNode;
-import org.esa.snap.core.datamodel.ProductNodeGroup;
-import org.esa.snap.core.datamodel.RasterDataNode;
-import org.esa.snap.core.datamodel.RasterDataNodePersistenceHelper;
-import org.esa.snap.core.datamodel.SampleCoding;
-import org.esa.snap.core.datamodel.Stx;
-import org.esa.snap.core.datamodel.TiePointGrid;
-import org.esa.snap.core.datamodel.VectorDataNode;
-import org.esa.snap.core.datamodel.VirtualBand;
+import org.esa.snap.core.dataio.persistence.*;
+import org.esa.snap.core.datamodel.*;
 import org.esa.snap.core.util.StringUtils;
 import org.esa.snap.core.util.SystemUtils;
 import org.esa.snap.runtime.Config;
@@ -71,66 +65,9 @@ import java.util.prefs.Preferences;
 
 import static org.esa.snap.core.util.StringUtils.isNotNullAndNotEmpty;
 import static org.esa.snap.core.util.SystemUtils.LOG;
-import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.DEFAULT_COMPRESSION_LEVEL;
-import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.DEFAULT_COMPRESSOR_ID;
-import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.DEFAULT_USE_ZIP_ARCHIVE;
-import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.PROPERTY_NAME_BINARY_FORMAT;
-import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.PROPERTY_NAME_COMPRESSION_LEVEL;
-import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.PROPERTY_NAME_COMPRESSOR_ID;
-import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.PROPERTY_NAME_USE_ZIP_ARCHIVE;
-import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MASKS;
-import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MEANINGS;
-import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_VALUES;
-import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.tryFindUnitString;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_BINARY_FORMAT;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_X;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_Y;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_ORIGINAL_RASTER_DATA_NODE_ORDER;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_DESC;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_METADATA;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_NAME;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_HEIGHT;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_WIDTH;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_TYPE;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_X;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_Y;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.BANDWIDTH;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.BANDWIDTH_UNIT;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_PALETTE_AUTO_DISTRIBUTE;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_PALETTE_DISCRETE;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_PALETTE_NUM_COLORS;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_PALETTE_POINTS;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_RGBA;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DATASET_AUTO_GROUPING;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DISCONTINUITY;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.FLAG_DESCRIPTIONS;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.HISTOGRAM_MATCHING;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_HEIGHT;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_WIDTH;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_X;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IDX_Y;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IMAGE_INFO;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.LABEL;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.LOG_10_SCALED;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NAME_MASKS;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NO_DATA_COLOR_RGBA;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NO_DATA_VALUE_USED;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.QUICKLOOK_BAND_NAME;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SAMPLE;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SOLAR_FLUX;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SPECTRAL_BAND_INDEX;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.STATISTICS;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.UNCERTAINTY_BAND_NAME;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.UNCERTAINTY_VISUALISATION_MODE;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.UNIT_EXTENSION;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VALID_PIXEL_EXPRESSION;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VIRTUAL_BAND_EXPRESSION;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.WAVELENGTH;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.WAVELENGTH_UNIT;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.convertToPath;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.getSnapDataType;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.metadataToList;
+import static org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants.*;
+import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.*;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
 import static ucar.nc2.constants.ACDD.TIME_END;
 import static ucar.nc2.constants.ACDD.TIME_START;
 import static ucar.nc2.constants.CDM.FILL_VALUE;
@@ -265,16 +202,18 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
     Map<String, Object> collectProductAttributes() throws ProductIOException {
         final Map<String, Object> attributes = new LinkedHashMap<>();
+        collectVersion(attributes);
         collectGeneralProductAttrs(attributes);
-//        if (dimensionNameGenerator != null) {
-//            attributes.put("dimensions", dimensionNameGenerator.dimensions);
-//        }
         collectProductGeoCodingAttrs(attributes);
         // flag attributes are collected per Band (Flag or Index Band). see collectSampleCodingAttributes()
         collectMaskAttrs(attributes);
         collectOriginalRasterDataNodeOrder(attributes);
         collectProductMetadata(attributes);
         return attributes;
+    }
+
+    private void collectVersion(Map<String, Object> attributes) {
+        attributes.put("znap_format", "0.1");
     }
 
     private void collectMaskAttrs(Map<String, Object> attributes) {
@@ -731,6 +670,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
     private Map<String, Object> collectTiePointGridAttributes(TiePointGrid tiePointGrid) {
         final Map<String, Object> attributes = new HashMap<>();
+        collectVersion(attributes);
         putArrayDimensions(attributes, tiePointGrid.getGridWidth(), tiePointGrid.getGridHeight());
         collectRasterAttributes(tiePointGrid, attributes);
         attributes.put(ATT_NAME_OFFSET_X, tiePointGrid.getOffsetX());
@@ -826,6 +766,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
 
     private Map<String, Object> collectBandAttributes(Band band) throws ProductIOException {
         final Map<String, Object> bandAttributes = new LinkedHashMap<>();
+        collectVersion(bandAttributes);
         putArrayDimensions(bandAttributes, band.getRasterWidth(), band.getRasterHeight());
         collectBandAttributes(band, bandAttributes);
         collectSampleCodingAttributes(band, bandAttributes);
@@ -912,7 +853,7 @@ public class ZarrProductWriter extends AbstractProductWriter {
             if (definedDims.containsKey(dimSize)) {
                 return definedDims.get(dimSize);
             } else {
-                if (definedDims.values().contains(name)) {
+                if (definedDims.containsValue(name)) {
                     final String newName = name + "_" + definedDims.size();
                     definedDims.put(dimSize, newName);
                     return newName;

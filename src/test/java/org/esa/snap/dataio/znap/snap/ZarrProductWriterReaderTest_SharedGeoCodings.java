@@ -1,7 +1,26 @@
+/*
+ * Copyright (c) 2021.  Brockmann Consult GmbH (info@brockmann-consult.de)
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see http://www.gnu.org/licenses/
+ */
+
 package org.esa.snap.dataio.znap.snap;
 
-import com.bc.zarr.ZarrGroup;
-import org.esa.snap.core.datamodel.*;
+import org.esa.snap.core.datamodel.Band;
+import org.esa.snap.core.datamodel.CrsGeoCoding;
+import org.esa.snap.core.datamodel.GeoCoding;
+import org.esa.snap.core.datamodel.Product;
+import org.esa.snap.core.datamodel.ProductData;
 import org.esa.snap.dataio.znap.preferences.ZnapPreferencesConstants;
 import org.esa.snap.runtime.Config;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
@@ -12,22 +31,19 @@ import org.junit.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.List;
 import java.util.prefs.Preferences;
 import java.util.stream.Collectors;
 
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING;
-import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
 
 public class ZarrProductWriterReaderTest_SharedGeoCodings {
 
     private Product product;
-    private CrsGeoCoding sceneGeoCoding;
-    private CrsGeoCoding sharedGC;
-    private CrsGeoCoding single_1;
-    private CrsGeoCoding single_2;
-    private List<Path> tempDirectories = new ArrayList<>();
+    private final List<Path> tempDirectories = new ArrayList<>();
 
     @Before
     public void setUp() throws Exception {
@@ -50,10 +66,10 @@ public class ZarrProductWriterReaderTest_SharedGeoCodings {
         final Band b8 = product.addBand("b8", ProductData.TYPE_INT8);
         final Band b9 = product.addBand("b9", ProductData.TYPE_INT8);
 
-        sceneGeoCoding = new CrsGeoCoding(DefaultGeographicCRS.WGS84, 3, 4, 14.0, 15.0, 0.2, 0.1);
-        sharedGC = new CrsGeoCoding(DefaultGeographicCRS.WGS84, 3, 4, 13.0, 15.0, 0.2, 0.1);
-        single_1 = new CrsGeoCoding(DefaultGeographicCRS.WGS84, 3, 4, 12.0, 15.0, 0.2, 0.1);
-        single_2 = new CrsGeoCoding(DefaultGeographicCRS.WGS84, 3, 4, 11.0, 15.0, 0.2, 0.1);
+        CrsGeoCoding sceneGeoCoding = new CrsGeoCoding(DefaultGeographicCRS.WGS84, 3, 4, 14.0, 15.0, 0.2, 0.1);
+        CrsGeoCoding sharedGC = new CrsGeoCoding(DefaultGeographicCRS.WGS84, 3, 4, 13.0, 15.0, 0.2, 0.1);
+        CrsGeoCoding single_1 = new CrsGeoCoding(DefaultGeographicCRS.WGS84, 3, 4, 12.0, 15.0, 0.2, 0.1);
+        CrsGeoCoding single_2 = new CrsGeoCoding(DefaultGeographicCRS.WGS84, 3, 4, 11.0, 15.0, 0.2, 0.1);
         product.setSceneGeoCoding(sceneGeoCoding);
         b4.setGeoCoding(sharedGC);
         b5.setGeoCoding(sharedGC);
@@ -88,31 +104,6 @@ public class ZarrProductWriterReaderTest_SharedGeoCodings {
             }
         }
         tempDirectories.clear();
-    }
-
-    @Test
-    public void testThatSharedGeocodingsAreMarkedInZarrAttributes() throws IOException {
-        final ZarrProductWriter zarrProductWriter = new ZarrProductWriter(new ZarrProductWriterPlugIn());
-        final Path rootPath = createTempDirectory();
-        zarrProductWriter.writeProductNodes(product, rootPath);
-
-        //verification
-        // Verify that product root group attributes contains a shared geocoding
-        final ZarrGroup group = ZarrGroup.open(rootPath);
-        final Map geocoding = (Map) group.getAttributes().get(ATT_NAME_GEOCODING);
-        assertThat(geocoding, is(notNullValue()));
-
-        // Verify that if a band has its own geocoding shared with other bands
-        // then the geo coding attributes must contain the Key "shared" and the value true.
-        final Band[] bands = product.getBands();
-        for (Band band : bands) {
-            final Map<String, Object> attr = group.openArray(band.getName()).getAttributes();
-            final boolean bandOwnsGC = band.getGeoCoding() != sceneGeoCoding;
-            if (bandOwnsGC) {
-                assertThat(attr.containsKey(ATT_NAME_GEOCODING), is(true));
-                final Map gcAttr = (Map) attr.get(ATT_NAME_GEOCODING);
-            }
-        }
     }
 
     @Test

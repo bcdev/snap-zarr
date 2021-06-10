@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2021.  Brockmann Consult GmbH (info@brockmann-consult.de)
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see http://www.gnu.org/licenses/
+ */
+
 package org.esa.snap.dataio.znap.snap;
 
 import com.bc.ceres.core.ProgressMonitor;
@@ -78,7 +94,50 @@ import static org.esa.snap.core.util.SystemUtils.LOG;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MASKS;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_MEANINGS;
 import static org.esa.snap.dataio.znap.snap.CFConstantsAndUtils.FLAG_VALUES;
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_BINARY_FORMAT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_GEOCODING;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_X;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_OFFSET_Y;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_ORIGINAL_RASTER_DATA_NODE_ORDER;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_DESC;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_METADATA;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_NAME;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_HEIGHT;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_SCENE_WIDTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_PRODUCT_TYPE;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_X;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.ATT_NAME_SUBSAMPLING_Y;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.BANDWIDTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_PALETTE_AUTO_DISTRIBUTE;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_PALETTE_DISCRETE;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_PALETTE_NUM_COLORS;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_PALETTE_POINTS;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.COLOR_RGBA;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DATASET_AUTO_GROUPING;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.DISCONTINUITY;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.FLAG_DESCRIPTIONS;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.HISTOGRAM_MATCHING;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.IMAGE_INFO;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.LABEL;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.LOG_10_SCALED;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NAME_MASKS;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NAME_SAMPLE_CODING;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NO_DATA_COLOR_RGBA;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.NO_DATA_VALUE_USED;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.QUICKLOOK_BAND_NAME;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SAMPLE;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SOLAR_FLUX;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.SPECTRAL_BAND_INDEX;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.STATISTICS;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.UNCERTAINTY_BAND_NAME;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.UNCERTAINTY_VISUALISATION_MODE;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VALID_PIXEL_EXPRESSION;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.VIRTUAL_BAND_EXPRESSION;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.WAVELENGTH;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.cast;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.convertToPath;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.getSnapDataType;
+import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.listToMetadata;
 import static ucar.nc2.constants.ACDD.TIME_END;
 import static ucar.nc2.constants.ACDD.TIME_START;
 import static ucar.nc2.constants.CDM.FILL_VALUE;
@@ -130,6 +189,7 @@ public class ZarrProductReader extends AbstractProductReader {
     @Override
     protected Product readProductNodesImpl() throws IOException {
         final Path rootPath = convertToPath(getInput());
+        assert rootPath != null;
         if (Files.isRegularFile(rootPath)) {
             store = new ZipStore(rootPath);
         } else {
@@ -138,12 +198,12 @@ public class ZarrProductReader extends AbstractProductReader {
         final ZarrGroup rootGroup = ZarrGroup.open(store);
         final Map<String, Object> productAttributes = rootGroup.getAttributes();
 
-        final String productName = (String) productAttributes.get(ATT_NAME_PRODUCT_NAME);
-        final String productType = (String) productAttributes.get(ATT_NAME_PRODUCT_TYPE);
-        final String productDesc = (String) productAttributes.get(ATT_NAME_PRODUCT_DESC);
+        final String productName = cast(productAttributes.get(ATT_NAME_PRODUCT_NAME));
+        final String productType = cast(productAttributes.get(ATT_NAME_PRODUCT_TYPE));
+        final String productDesc = cast(productAttributes.get(ATT_NAME_PRODUCT_DESC));
         final ProductData.UTC sensingStart = getTime(productAttributes, TIME_START, rootPath); // "time_coverage_start"
         final ProductData.UTC sensingStop = getTime(productAttributes, TIME_END, rootPath); // "time_coverage_end"
-        final List<Map<String, Object>> product_metadata = (List<Map<String, Object>>) productAttributes.get(ATT_NAME_PRODUCT_METADATA);
+        final List<?> product_metadata = cast(productAttributes.get(ATT_NAME_PRODUCT_METADATA));
         final MetadataElement[] metadataElements = listToMetadata(product_metadata);
         final int sceneRasterWidth = ((Number) productAttributes.get(ATT_NAME_PRODUCT_SCENE_WIDTH)).intValue();
         final int sceneRasterHeight = ((Number) productAttributes.get(ATT_NAME_PRODUCT_SCENE_HEIGHT)).intValue();
@@ -169,8 +229,9 @@ public class ZarrProductReader extends AbstractProductReader {
             zarrArrays.put(rasterName, zarrArray);
         }
 
-        final List<String> rasterDataNodeOrder = (List) productAttributes.get(ATT_NAME_ORIGINAL_RASTER_DATA_NODE_ORDER);
-        for (String rasterName : rasterDataNodeOrder) {
+        final List<?> rasterDataNodeOrder = cast(productAttributes.get(ATT_NAME_ORIGINAL_RASTER_DATA_NODE_ORDER));
+        for (Object rasterNameObj : rasterDataNodeOrder) {
+            String rasterName = cast(rasterNameObj);
             if (!zarrArrays.containsKey(rasterName)) {
                 continue;
             }
@@ -185,11 +246,11 @@ public class ZarrProductReader extends AbstractProductReader {
 
             final Map<String, Object> attributes = zarrArray.getAttributes();
 
-            if (attributes != null && attributes.containsKey(ATT_NAME_OFFSET_X)) {
-                final double offsetX = (double) attributes.get(ATT_NAME_OFFSET_X);
-                final double offsetY = (double) attributes.get(ATT_NAME_OFFSET_Y);
-                final double subSamplingX = (double) attributes.get(ATT_NAME_SUBSAMPLING_X);
-                final double subSamplingY = (double) attributes.get(ATT_NAME_SUBSAMPLING_Y);
+            if (attributes.containsKey(ATT_NAME_OFFSET_X)) {
+                final double offsetX = cast(attributes.get(ATT_NAME_OFFSET_X));
+                final double offsetY = cast(attributes.get(ATT_NAME_OFFSET_Y));
+                final double subSamplingX = cast(attributes.get(ATT_NAME_SUBSAMPLING_X));
+                final double subSamplingY = cast(attributes.get(ATT_NAME_SUBSAMPLING_Y));
                 final float[] dataBuffer = new float[width * height];
                 if (attributes.containsKey(ATT_NAME_BINARY_FORMAT)) {
                     initBinaryReaderPlugin(attributes);
@@ -209,16 +270,17 @@ public class ZarrProductReader extends AbstractProductReader {
                 }
                 final TiePointGrid tiePointGrid = new TiePointGrid(rasterName, width, height, offsetX, offsetY, subSamplingX, subSamplingY, dataBuffer);
                 if (attributes.containsKey(DISCONTINUITY)) {
-                    tiePointGrid.setDiscontinuity(((Number) attributes.get(DISCONTINUITY)).intValue());
+                    final Number num = cast(attributes.get(DISCONTINUITY));
+                    tiePointGrid.setDiscontinuity(num.intValue());
                 }
                 product.addTiePointGrid(tiePointGrid);
                 applyRasterAttributes(attributes, tiePointGrid);
                 nodeAttributes.put(tiePointGrid, attributes);
             } else {
                 final Band band;
-                final boolean virtualBand = attributes != null && attributes.containsKey(VIRTUAL_BAND_EXPRESSION);
+                final boolean virtualBand = attributes.containsKey(VIRTUAL_BAND_EXPRESSION);
                 if (virtualBand) {
-                    final String expr = (String) attributes.get(VIRTUAL_BAND_EXPRESSION);
+                    final String expr = cast(attributes.get(VIRTUAL_BAND_EXPRESSION));
                     band = new VirtualBand(rasterName, snapDataType.getValue(), width, height, expr);
                 } else {
                     band = new Band(rasterName, snapDataType.getValue(), width, height);
@@ -245,23 +307,24 @@ public class ZarrProductReader extends AbstractProductReader {
         }
 
         final HashMap<String, Map<String, Object>> masksMap = new HashMap<>();
-        final List<Map<String, Object>> masksObjectList = (List) productAttributes.get(NAME_MASKS);
+        final List<Map<String, Map<String, Object>>> masksObjectList = cast(productAttributes.get(NAME_MASKS));
         if (masksObjectList != null) {
-            for (Map<String, Object> maskObj : masksObjectList) {
-                final String name = (String) ((Map) maskObj.get("Mask")).get("NAME");
-                masksMap.put(name, maskObj);
+            for (Map<String, Map<String, Object>> maskObj : masksObjectList) {
+                final String name = cast(maskObj.get("Mask").get("NAME"));
+                masksMap.put(name, cast(maskObj));
             }
         }
 
-        for (String rasterName : rasterDataNodeOrder) {
+        for (Object rasterNameObj : rasterDataNodeOrder) {
+            String rasterName = cast( rasterNameObj);
             if (masksMap.containsKey(rasterName)) {
                 final Map<String, Object> maskMap = masksMap.get(rasterName);
                 final Item item = languageSupport.translateToItem(maskMap);
                 final PersistenceDecoder<Mask> decoder = persistence.getDecoder(item);
                 if (decoder != null) {
                     final Mask mask = decoder.decode(item, product);
-                    final String maskName = mask.getName();
                     if (mask != null) {
+                        final String maskName = mask.getName();
                         final ProductNodeGroup<Mask> maskGroup = product.getMaskGroup();
                         if (maskGroup.contains(maskName)) {
                             maskGroup.remove(maskGroup.get(maskName));
@@ -326,7 +389,7 @@ public class ZarrProductReader extends AbstractProductReader {
         }
     }
 
-    private void addGeocodings(Map<String, Object> productAttributes) throws IOException {
+    private void addGeocodings(Map<String, Object> productAttributes) {
         addGeoCoding(product, productAttributes, product::setSceneGeoCoding);
         final List<RasterDataNode> rasterDataNodes = product.getRasterDataNodes();
         for (RasterDataNode rasterDataNode : rasterDataNodes) {
@@ -337,11 +400,11 @@ public class ZarrProductReader extends AbstractProductReader {
         }
     }
 
-    private void addGeoCoding(ProductNode node, Map<String, Object> attributes, GeocodingSetter gcSetter) throws IOException {
+    private void addGeoCoding(ProductNode node, Map<String, Object> attributes, GeocodingSetter gcSetter) {
         if (!attributes.containsKey(ATT_NAME_GEOCODING)) {
             return;
         }
-        final Map gcAttribs = (Map) attributes.get(ATT_NAME_GEOCODING);
+        final Map<String, Object> gcAttribs = cast(attributes.get(ATT_NAME_GEOCODING));
         if (gcAttribs == null) {
             return;
         }
@@ -359,7 +422,7 @@ public class ZarrProductReader extends AbstractProductReader {
         void setGeocoding(GeoCoding gc);
     }
 
-    GeoCoding createGeoCoding(ProductNode node, Map gcAttribs) throws IOException {
+    GeoCoding createGeoCoding(ProductNode node, Map<String, Object> gcAttribs) {
         final Product product = node.getProduct();
         if (gcAttribs.containsKey(DimapProductConstants.TAG_WKT)
             && gcAttribs.containsKey(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM)) {
@@ -377,16 +440,16 @@ public class ZarrProductReader extends AbstractProductReader {
             LOG.info("width = " + width);
             LOG.info("height = " + height);
             try {
-                final String wkt = (String) gcAttribs.get(DimapProductConstants.TAG_WKT);
+                final String wkt = cast(gcAttribs.get(DimapProductConstants.TAG_WKT));
                 LOG.info("wkt = " + wkt);
                 final CoordinateReferenceSystem crs = CRS.parseWKT(wkt);
 
-                final List matrix = (List) gcAttribs.get(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM);
+                final List<Double> matrix = cast(gcAttribs.get(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM));
                 LOG.info("matrix = " + Arrays.toString(matrix.toArray()));
 
                 final double[] ma = new double[matrix.size()];
                 for (int i = 0; i < matrix.size(); i++) {
-                    ma[i] = (double) matrix.get(i);
+                    ma[i] = matrix.get(i);
                 }
                 final AffineTransform i2m = new AffineTransform(ma);
                 Rectangle imageBounds = new Rectangle(width, height);
@@ -432,14 +495,14 @@ public class ZarrProductReader extends AbstractProductReader {
         return out.toString();
     }
 
-    private String getNotEmptyString(Map map, String key) {
+    private String getNotEmptyString(Map<?, ?> map, String key) {
         final Object o = getNotNull(map, key);
         final String s = ((String) o).trim();
         assertNotNullOrEmpty(key, s);
         return s;
     }
 
-    private Object getNotNull(Map map, String key) {
+    private Object getNotNull(Map<?, ?> map, String key) {
         final Object o = map.get(key);
         assertNotNull(key, o);
         return o;
@@ -447,7 +510,7 @@ public class ZarrProductReader extends AbstractProductReader {
 
     private void initBinaryReaderPlugin(Map<String, Object> attributes) {
         if (binaryReaderPlugIn == null) {
-            final String binaryFormat = (String) attributes.get(ATT_NAME_BINARY_FORMAT);
+            final String binaryFormat = cast(attributes.get(ATT_NAME_BINARY_FORMAT));
             binaryReaderPlugIn = ProductIO.getProductReader(binaryFormat).getReaderPlugIn();
             binaryFileExtension = binaryReaderPlugIn.getDefaultFileExtensions()[0];
             binaryProducts = new HashMap<>();
@@ -469,16 +532,20 @@ public class ZarrProductReader extends AbstractProductReader {
     void applyBandAttributes(Map<String, Object> attributes, Band band) {
         // TODO: 21.07.2019 SE -- units for bandwidth, wavelength, solarFlux
         if (attributes.get(BANDWIDTH) != null) {
-            band.setSpectralBandwidth(((Number) attributes.get(BANDWIDTH)).floatValue());
+            final Number number = cast(attributes.get(BANDWIDTH));
+            band.setSpectralBandwidth(number.floatValue());
         }
         if (attributes.get(WAVELENGTH) != null) {
-            band.setSpectralWavelength(((Number) attributes.get(WAVELENGTH)).floatValue());
+            final Number number = cast(attributes.get(WAVELENGTH));
+            band.setSpectralWavelength(number.floatValue());
         }
         if (attributes.get(SOLAR_FLUX) != null) {
-            band.setSolarFlux(((Number) attributes.get(SOLAR_FLUX)).floatValue());
+            final Number number = cast(attributes.get(SOLAR_FLUX));
+            band.setSolarFlux(number.floatValue());
         }
         if (attributes.get(SPECTRAL_BAND_INDEX) != null) {
-            band.setSpectralBandIndex(((Number) attributes.get(SPECTRAL_BAND_INDEX)).intValue());
+            final Number number = cast(attributes.get(SPECTRAL_BAND_INDEX));
+            band.setSpectralBandIndex(number.intValue());
         }
         applySampleCodings(attributes, band);
         applyRasterAttributes(attributes, band);
@@ -486,47 +553,51 @@ public class ZarrProductReader extends AbstractProductReader {
 
     void applyRasterAttributes(Map<String, Object> attributes, RasterDataNode rasterDataNode) {
         if (attributes.get(LONG_NAME) != null) {
-            rasterDataNode.setDescription((String) attributes.get(LONG_NAME));
+            rasterDataNode.setDescription(cast(attributes.get(LONG_NAME)));
         }
         if (attributes.get(UNITS) != null) {
-            rasterDataNode.setUnit((String) attributes.get(UNITS));
+            rasterDataNode.setUnit(cast(attributes.get(UNITS)));
         }
         if (attributes.get(SCALE_FACTOR) != null) {
-            rasterDataNode.setScalingFactor(((Number) attributes.get(SCALE_FACTOR)).doubleValue());
+            final Number number = cast(attributes.get(SCALE_FACTOR));
+            rasterDataNode.setScalingFactor(number.doubleValue());
         }
         if (attributes.get(ADD_OFFSET) != null) {
-            rasterDataNode.setScalingOffset(((Number) attributes.get(ADD_OFFSET)).doubleValue());
+            final Number number = cast(attributes.get(ADD_OFFSET));
+            rasterDataNode.setScalingOffset(number.doubleValue());
         }
-        if (getNoDataValue(attributes) != null) {
-            rasterDataNode.setNoDataValue(getNoDataValue(attributes).doubleValue());
+        final Number noDataValue = getNoDataValue(attributes);
+        if (noDataValue != null) {
+            rasterDataNode.setNoDataValue(noDataValue.doubleValue());
         }
-        if (attributes.get(NO_DATA_VALUE_USED) != null) {
-            rasterDataNode.setNoDataValueUsed((Boolean) attributes.get(NO_DATA_VALUE_USED));
+        final Object o = attributes.get(NO_DATA_VALUE_USED);
+        if (o != null) {
+            rasterDataNode.setNoDataValueUsed(cast(o));
         }
         if (attributes.get(VALID_PIXEL_EXPRESSION) != null) {
-            rasterDataNode.setValidPixelExpression((String) attributes.get(VALID_PIXEL_EXPRESSION));
+            rasterDataNode.setValidPixelExpression(cast(attributes.get(VALID_PIXEL_EXPRESSION)));
         }
         applyAncillaryElements(attributes, rasterDataNode);
         if (attributes.get(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM) != null) {
-            final List matrix = (List) attributes.get(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM);
+            final List<Double> matrix = cast(attributes.get(DimapProductConstants.TAG_IMAGE_TO_MODEL_TRANSFORM));
             LOG.info("matrix for band '" + rasterDataNode.getName() + "' = " + Arrays.toString(matrix.toArray()));
 
             final double[] ma = new double[matrix.size()];
             for (int i = 0; i < matrix.size(); i++) {
-                ma[i] = (double) matrix.get(i);
+                ma[i] = matrix.get(i);
             }
             final AffineTransform i2m = new AffineTransform(ma);
             rasterDataNode.setImageToModelTransform(i2m);
         }
         if (attributes.containsKey(STATISTICS)) {
-            final Map<String, Object> stxM = (Map<String, Object>) attributes.get(STATISTICS);
+            final Map<String, Object> stxM = cast(attributes.get(STATISTICS));
             final double minSample = ((Number) stxM.get(DimapProductConstants.TAG_STX_MIN)).doubleValue();
             final double maxSample = ((Number) stxM.get(DimapProductConstants.TAG_STX_MAX)).doubleValue();
             final double meanSample = ((Number) stxM.get(DimapProductConstants.TAG_STX_MEAN)).doubleValue();
             final double stdDev = ((Number) stxM.get(DimapProductConstants.TAG_STX_STDDEV)).doubleValue();
             final boolean intHistogram = !ProductData.isFloatingPointType(rasterDataNode.getGeophysicalDataType());
-            final int[] bins = ((List<Integer>) stxM.get(DimapProductConstants.TAG_HISTOGRAM))
-                    .stream().mapToInt(Integer::intValue).toArray();
+            final List<Integer> integers = cast(stxM.get(DimapProductConstants.TAG_HISTOGRAM));
+            final int[] bins = integers.stream().mapToInt(Integer::intValue).toArray();
             final int resLevel = ((Number) stxM.get(DimapProductConstants.TAG_STX_LEVEL)).intValue();
             final Stx stx = new StxFactory()
                     .withMinimum(minSample)
@@ -539,21 +610,21 @@ public class ZarrProductReader extends AbstractProductReader {
             rasterDataNode.setStx(stx);
         }
         if (attributes.containsKey(IMAGE_INFO)) {
-            final Map<String, Object> infoM = (Map<String, Object>) attributes.get(IMAGE_INFO);
-            final List<Map<String, Object>> pointsL = (List<Map<String, Object>>) infoM.get(COLOR_PALETTE_POINTS);
+            final Map<String, Object> infoM = cast(attributes.get(IMAGE_INFO));
+            final List<Map<String, Object>> pointsL = cast(infoM.get(COLOR_PALETTE_POINTS));
             final ArrayList<ColorPaletteDef.Point> points = new ArrayList<>();
             for (Map<String, Object> pointM : pointsL) {
                 final ColorPaletteDef.Point point = new ColorPaletteDef.Point();
                 if (pointM.containsKey(LABEL)) {
-                    String label = (String) pointM.get(LABEL);
+                    String label = cast(pointM.get(LABEL));
                     label = label != null ? label.trim() : label;
                     if (StringUtils.isNotNullAndNotEmpty(label)) {
                         point.setLabel(label);
                     }
                 }
                 point.setSample(((Number) pointM.get(SAMPLE)).doubleValue());
-                final int[] rgba = ((List<Integer>) pointM.get(COLOR_RGBA))
-                        .stream().mapToInt(Integer::intValue).toArray();
+                final List<Integer> integers = cast(pointM.get(COLOR_RGBA));
+                final int[] rgba = integers.stream().mapToInt(Integer::intValue).toArray();
                 point.setColor(createColor(rgba));
                 points.add(point);
             }
@@ -564,19 +635,19 @@ public class ZarrProductReader extends AbstractProductReader {
             colorPaletteDef.setAutoDistribute((boolean) infoM.get(COLOR_PALETTE_AUTO_DISTRIBUTE));
             final ImageInfo imageInfo = new ImageInfo(colorPaletteDef);
             if (infoM.containsKey(NO_DATA_COLOR_RGBA)) {
-                final int[] rgba = ((List<Integer>) infoM.get(NO_DATA_COLOR_RGBA))
-                        .stream().mapToInt(Integer::intValue).toArray();
+                final List<Integer> integers = cast(infoM.get(NO_DATA_COLOR_RGBA));
+                final int[] rgba = integers.stream().mapToInt(Integer::intValue).toArray();
                 imageInfo.setNoDataColor(createColor(rgba));
             }
-            final String matching = (String) infoM.get(HISTOGRAM_MATCHING);
+            final String matching = cast(infoM.get(HISTOGRAM_MATCHING));
             final ImageInfo.HistogramMatching histogramMatching = ImageInfo.HistogramMatching.valueOf(matching);
             imageInfo.setHistogramMatching(histogramMatching);
             imageInfo.setLogScaled((boolean) infoM.get(LOG_10_SCALED));
             if (infoM.containsKey(UNCERTAINTY_BAND_NAME)) {
-                imageInfo.setUncertaintyBandName((String) infoM.get(UNCERTAINTY_BAND_NAME));
+                imageInfo.setUncertaintyBandName(cast(infoM.get(UNCERTAINTY_BAND_NAME)));
             }
             if (infoM.containsKey(UNCERTAINTY_VISUALISATION_MODE)) {
-                final String modeName = (String) infoM.get(UNCERTAINTY_VISUALISATION_MODE);
+                final String modeName = cast(infoM.get(UNCERTAINTY_VISUALISATION_MODE));
                 final ImageInfo.UncertaintyVisualisationMode mode;
                 mode = ImageInfo.UncertaintyVisualisationMode.valueOf(modeName);
                 imageInfo.setUncertaintyVisualisationMode(mode);
@@ -599,11 +670,11 @@ public class ZarrProductReader extends AbstractProductReader {
 
     private static void applySampleCodings(Map<String, Object> attributes, Band band) {
         final String rasterName = band.getName();
-        final List<String> flagMeanings = (List) attributes.get(FLAG_MEANINGS);
+        final List<String> flagMeanings = cast(attributes.get(FLAG_MEANINGS));
         if (flagMeanings != null) {
 
-            final List<Number> flagMasks = (List<Number>) attributes.get(FLAG_MASKS);
-            final List<Double> flagValues = (List<Double>) attributes.get(FLAG_VALUES);
+            final List<Number> flagMasks = cast(attributes.get(FLAG_MASKS));
+            final List<Double> flagValues = cast(attributes.get(FLAG_VALUES));
 
             FlagCoding flagCoding = null;
             IndexCoding indexCoding = null;
@@ -644,7 +715,8 @@ public class ZarrProductReader extends AbstractProductReader {
 
     private static String getFlagDescription(Map<String, Object> attributes, int pos) {
         if (attributes.containsKey(FLAG_DESCRIPTIONS)) {
-            return (String) ((List) attributes.get(FLAG_DESCRIPTIONS)).get(pos);
+            final List<String> list = cast(attributes.get(FLAG_DESCRIPTIONS));
+            return list.get(pos);
         }
         return null;
     }
@@ -652,7 +724,7 @@ public class ZarrProductReader extends AbstractProductReader {
     private static String getSampleCodingName(Map<String, Object> attributes, String rasterName) {
         final String sampleCodingName;
         if (attributes.containsKey(NAME_SAMPLE_CODING)) {
-            sampleCodingName = (String) attributes.get(NAME_SAMPLE_CODING);
+            sampleCodingName = cast(attributes.get(NAME_SAMPLE_CODING));
         } else {
             sampleCodingName = rasterName;
         }
@@ -663,7 +735,7 @@ public class ZarrProductReader extends AbstractProductReader {
         if (!productAttributes.containsKey(attributeName)) {
             return null;
         }
-        final String iso8601String = (String) productAttributes.get(attributeName);
+        final String iso8601String = cast(productAttributes.get(attributeName));
         try {
             return ISO8601ConverterWithMlliseconds.parse(iso8601String);
         } catch (ParseException e) {

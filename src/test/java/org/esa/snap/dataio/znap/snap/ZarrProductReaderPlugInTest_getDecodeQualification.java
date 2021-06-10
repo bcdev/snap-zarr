@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2021.  Brockmann Consult GmbH (info@brockmann-consult.de)
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see http://www.gnu.org/licenses/
+ */
+
 package org.esa.snap.dataio.znap.snap;
 
 import static org.hamcrest.Matchers.*;
@@ -9,7 +25,6 @@ import org.esa.snap.core.util.io.TreeDeleter;
 import org.junit.*;
 
 import java.io.IOException;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -25,8 +40,7 @@ public class ZarrProductReaderPlugInTest_getDecodeQualification {
     @Before
     public void setUp() throws Exception {
         plugIn = new ZarrProductReaderPlugIn();
-        final Path fsRoot = FileSystems.getDefault().getRootDirectories().iterator().next();
-        testPath = fsRoot.resolve("temporary-snap-development-test-path");
+        testPath = Files.createTempDirectory("temporary-snap-development-test-path");
         Files.createDirectories(testPath);
         productRoot = testPath.resolve("snap_zarr_product_root_dir.znap");
         zarrRootHeader = productRoot.resolve(ZarrConstants.FILENAME_DOT_ZGROUP);
@@ -37,8 +51,6 @@ public class ZarrProductReaderPlugInTest_getDecodeQualification {
     @After
     public void tearDown() throws IOException {
         TreeDeleter.deleteDir(testPath);
-//        final boolean exists = Files.exists(testPath);
-//        System.out.println("exists = " + exists);
     }
 
     @Test
@@ -89,7 +101,7 @@ public class ZarrProductReaderPlugInTest_getDecodeQualification {
     }
 
     @Test
-    public void decodeQualification_UNABLE_productRootDoesNotExist() throws IOException {
+    public void decodeQualification_UNABLE_productRootDoesNotExist() {
         // No file or directory as expected
 
         final DecodeQualification decodeQualification = plugIn.getDecodeQualification(productRoot);
@@ -109,7 +121,6 @@ public class ZarrProductReaderPlugInTest_getDecodeQualification {
     @Test
     public void decodeQualification_UNABLE_NoSnapHeaderFile() throws IOException {
         Files.createDirectories(productRoot);
-//        Files.createFile(headerFile);
         Files.createDirectories(aRasterDataDir);
         Files.createFile(zarrHeaderFile);
 
@@ -121,7 +132,6 @@ public class ZarrProductReaderPlugInTest_getDecodeQualification {
     @Test
     public void decodeQualification_UNABLE_SnapHeaderFileExistButIsADirectory() throws IOException {
         Files.createDirectories(productRoot);
-//        Files.createFile(headerFile);
         Files.createDirectories(zarrRootHeader);
         Files.createDirectories(aRasterDataDir);
         Files.createFile(zarrHeaderFile);
@@ -136,7 +146,6 @@ public class ZarrProductReaderPlugInTest_getDecodeQualification {
         Files.createDirectories(productRoot);
         Files.createFile(zarrRootHeader);
         Files.createDirectories(aRasterDataDir);
-//        Files.createFile(zarrHeaderFile);
 
         final DecodeQualification decodeQualification = plugIn.getDecodeQualification(productRoot);
 
@@ -148,7 +157,6 @@ public class ZarrProductReaderPlugInTest_getDecodeQualification {
         Files.createDirectories(productRoot);
         Files.createFile(zarrRootHeader);
         Files.createDirectories(aRasterDataDir);
-//        Files.createFile(zarrHeaderFile);
         Files.createDirectories(zarrHeaderFile);
 
         final DecodeQualification decodeQualification = plugIn.getDecodeQualification(productRoot);

@@ -1,10 +1,26 @@
+/*
+ * Copyright (c) 2021.  Brockmann Consult GmbH (info@brockmann-consult.de)
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see http://www.gnu.org/licenses/
+ */
+
 package org.esa.snap.dataio.znap.snap;
 
-import com.bc.zarr.ZarrGroup;
-import org.esa.snap.core.dataio.ProductReader;
-import org.esa.snap.core.dataio.ProductWriter;
-import org.esa.snap.core.datamodel.*;
-import org.geotools.referencing.crs.DefaultGeographicCRS;
+import org.esa.snap.core.datamodel.Product;
+import org.esa.snap.core.datamodel.ProductData;
+import org.esa.snap.core.datamodel.RasterDataNode;
+import org.esa.snap.core.datamodel.TiePointGeoCoding;
+import org.esa.snap.core.datamodel.TiePointGrid;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -12,11 +28,12 @@ import org.junit.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.esa.snap.dataio.znap.snap.ZnapConstantsAndUtils.*;
-import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
 
 public class ZarrProductWriterReaderTest_persist_TiePointGeoCoding {
@@ -96,7 +113,7 @@ public class ZarrProductWriterReaderTest_persist_TiePointGeoCoding {
         assertArrayEquals(srcLons, readLons, Float.MIN_VALUE);
         assertArrayEquals(srcLats, readLats, Float.MIN_VALUE);
         assertNotSame(product.getSceneGeoCoding(), readIn.getSceneGeoCoding());
-        assertEquals(readIn.getSceneGeoCoding() instanceof TiePointGeoCoding, true);
+        assertTrue(readIn.getSceneGeoCoding() instanceof TiePointGeoCoding);
         final TiePointGeoCoding srcGC = (TiePointGeoCoding) product.getSceneGeoCoding();
         final TiePointGeoCoding readGC = (TiePointGeoCoding) readIn.getSceneGeoCoding();
         assertEquals(srcGC.getLonGrid().getName(), readGC.getLonGrid().getName());
